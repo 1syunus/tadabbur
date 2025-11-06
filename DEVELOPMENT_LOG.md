@@ -1,9 +1,13 @@
 ﻿# Development Log
 
-> This document tracks real-time progress, decisions, challenges, and metrics during development.  
+> **Note to Contributors:** This document is maintained by the primary developer for tracking architectural rationale, time estimates, and resume context. It is not required reading for general contributions.
+
+> This document tracks real-time progress, decisions, challenges, and metrics during development.  
+
 > **Purpose**: Raw notes for compiling final README and resume bullets.
 
 ---
+...
 
 ## Project Initialization - 2025-11-05
 
@@ -25,6 +29,21 @@
 
 ---
 
+## Framework & Infrastructure Setup - 2025-11-06
+
+### Completed Tasks
+- [x] Initialized Next.js project with fixed TypeScript (ESM) configuration.
+- [x] Installed core dependencies (@supabase/supabase-js, zod, Next.js).
+- [x] Documented Contract-Driven Design (CDD) philosophy in README.
+- [x] Initialized Supabase CLI and project folder structure.
+
+### Next Steps
+1. Design database schema, including RLS policies.
+2. Generate TypeScript types from schema (Contract-First).
+3. Create initial database migrations and push to local DB.
+
+---
+
 ## Technical Decisions Log
 
 ### Decision 1: Supabase vs Firebase vs Custom Backend
@@ -37,11 +56,32 @@
   - Great TypeScript support
 - **Tradeoff**: Less mature than Firebase, smaller ecosystem
 
+### Decision 2: Contract-Driven Design & ESM Config Fix
+- **Date**: 2025-11-06
+- **Decision**: Adopt Contract-Driven Design and update TypeScript/Next.js ESM configuration
+- **Rationale**:
+  - Made a new architectural choice (Contract-Driven Design over immediate TDD)
+  - Applied a key technical fix to enable `export` syntax in modules
+  - Critical to log these decisions to maintain clarity and track reasoning over time
+- **Tradeoff**: Delaying some unit tests in favor of establishing a stable data contract first
+
+
 ---
 
 ## Challenges & Solutions
 
-[Add entries as challenges are encountered during development]
+#### Challenge 1: Failed Next.js Scaffolding & Pathing Errors
+- **Date**: 2025-11-06
+- **Problem**: The `npx create-next-app` failed due to the presence of foundational files (e.g., `README.md`). Subsequent `npx` commands (like `tailwindcss init -p`) failed in the PowerShell environment due to missing executables/symlinks, despite dependencies being installed.
+- **Impact**: Added +1.5 hours of unexpected debugging time and forced a change from the streamlined scaffold process.
+- **Attempted Solutions**: 
+  1. `npx create-next-app ...` - Failed due to non-empty directory.
+  2. Manual `npm install` - Led to further `npx` pathing errors in the terminal.
+- **Final Solution**: Switched to a fully manual installation and configuration process, explicitly defining npm run scripts in `package.json` (e.g., `tailwind:init`) to bypass faulty system pathing. This proved more robust.
+- **Code Changes**: See commit `chore(infra): Setup Next.js, fix TS/ESM...`
+- **Learning**: Do not rely on scaffold tools in non-empty directories. Always use defined npm scripts for cross-platform reliability when working with local CLIs (like Tailwind) on Windows/PowerShell.
+
+---
 
 ### Template for Future Entries:
 
@@ -55,7 +95,7 @@
 - **Final Solution**: [What worked]
 - **Code Changes**: [Commit hash or PR link]
 - **Learning**: [What did you learn?]
-- **Resume Angle**: [How to phrase this for resume]
+
 
 ---
 
@@ -82,11 +122,10 @@
 
 ## Time Tracking
 
-[Track time spent on major tasks for resume/portfolio context]
-
 | Task | Estimated | Actual | Notes |
 |------|-----------|--------|-------|
-| Project setup | 2h | TBD | Repo, docs, infrastructure |
+| Project setup | 2h | 1.5 | Repo, docs, infrastructure |
+| Framework Init | 1h	| 2.5h | Infrastructure setup, fixing scaffold errors (see challenges) |
 | Database design | 3h | TBD | Schema, RLS policies, migrations |
 | API integration | 4h | TBD | Quran Foundation API client |
 | Semantic search | 6h | TBD | AI keyword extraction + caching |
@@ -127,9 +166,15 @@
 
 [Track as packages are installed]
 
+
 | Package | Version | Purpose | Date Added |
 |---------|---------|---------|------------|
-| Example: @supabase/supabase-js | ^2.x | Database client | - |
+| @supabase/supabase-js | ^2.x | Database client | 2025-11-06 |
+| next | ^16.x | Frontend/Backend framework | 2025-11-06 |
+| react, react-dom | ^19.x | UI Library | 2025-11-06 |
+| zod | ^4.x | Runtime validation (Contracts-First) | 2025-11-06 |
+| typescript | ^5.x | Language/Compiler | 2025-11-06 |
+| tailwindcss | ^3.x | Styling utility | 2025-11-06 |
 
 ---
 
@@ -155,4 +200,4 @@ Types: feat, fix, chore, docs, style, refactor, test, perf
 
 ---
 
-**Last Updated**: 2025-11-05
+**Last Updated**: 2025-11-06
