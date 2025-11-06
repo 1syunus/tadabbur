@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "es2022", /* Set a modern target */
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "module": "esnext", /* Use ES Modules */
+    "moduleResolution": "node", /* or "node" for compatibility */
+    "allowJs": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "jsx": "preserve",
+    "isolatedModules": true,
+
+    /* Next.js Specifics */
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./*"] /* CRITICAL for the import alias */
+    },
+    "baseUrl": ".",
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"], /* Include all relevant files */
+  "exclude": ["node_modules"]
+}

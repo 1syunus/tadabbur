@@ -70,6 +70,18 @@ A production-ready web application that helps Muslims deepen their Quran engagem
 | **Database Caching** | Persistent across sessions, reduces API calls 90%+ | Storage cost (negligible at MVP scale) |
 | **Serverless Functions** | Auto-scaling, pay-per-use | Cold start latency (~100-300ms) |
 
+### Development Strategy
+We are prioritizing **Contract-Driven Design (CDD)** over strict Test-Driven Development (TDD), especially in light of **high-velocity MVP** development
+
+| Rationale                  |  Benefit for MVP |
+|-----------------------------|------------------------------------------------|
+| Data Integrity First        | The Database schema (the data contract) is the most stable and foundational piece. We define and secure it before writing mutable business logic. |
+| High Compiler Coverage      | TypeScript and Zod (runtime validation) act as the primary, high-value testing layer, catching data shape inconsistencies and errors that TDD would spend significant time unit-testing. |
+| Faster Iteration            | We avoid the overhead of writing and maintaining unit tests for features that are still evolving, leading to a much faster delivery of the core application. |
+| Test Layer Decoupling       | Comprehensive Jest/RTL tests can be added later without changing the foundational architecture, using our fixed contracts as reliable interfaces to test against. |
+
+
+
 ---
 
 ## Getting Started
