@@ -6,7 +6,7 @@ labels: enhancement
 assignees: ''
 ---
 
-## 📋 Feature Description
+## Feature Description
 
 **User Story**: As a [type of user], I want [goal] so that [benefit].
 
