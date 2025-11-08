@@ -6,7 +6,7 @@ import { uuidField, optionalNullableUuidField, nonBlankString } from '@/utils/zo
  * Defines constraints for note creation and updates
  */
 const BaseNoteSchema = z.object({
-  section_id: optionalNullableUuidField(),
+  section_id: optionalNullableUuidField,
   
   title: nonBlankString(255).optional(),
   
@@ -42,4 +42,4 @@ export const UpdateNoteSchema = BaseNoteSchema.partial()
  */
 export const NoteIdSchema = z.object({
   id: uuidField,
-})  
+})
