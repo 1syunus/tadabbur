@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { uuidField, optionalNullableUuidField, nonBlankString } from '@/utils/zodhelpers'
+import { uuidField, optionalNullableUuidField, nonBlankString } from '@/utils/zodHelpers'
 
 /**
  * Base schema for note page fields

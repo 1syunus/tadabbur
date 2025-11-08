@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { uuidField, nonBlankString } from '@/utils/zodhelpers'
+import { uuidField, nonBlankString } from '@/utils/zodHelpers'
 
 // ==========================================
 // Conversation Schemas
