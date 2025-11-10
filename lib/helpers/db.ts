@@ -1,37 +1,88 @@
-import { createClient } from '@supabase/supabase-js'
-import { Database } from '@/types/supabase'
+// src/lib/tests/supabase-test-client.ts
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { Database } from '@/types/supabase';
 
-export type TableName = keyof Database['public']['Tables']
+const SUPABASE_URL = process.env.SUPABASE_URL!;
+const SERVICE_KEY = process.env.SUPABASE_KEY!;
+const TEST_USER_ID = process.env.TEST_USER_ID!;
+const TEST_USER_EMAIL = process.env.TEST_USER_EMAIL || 'test@test.com';
+const TEST_USER_PASSWORD = process.env.TEST_USER_PASSWORD || 'test_password';
+
+if (!SUPABASE_URL || !SERVICE_KEY || !TEST_USER_ID) {
+  throw new Error(
+    'Missing required .env.test values: SUPABASE_URL, SUPABASE_KEY, TEST_USER_ID'
+  );
+}
 
 /**
- * Creates a plain Supabase client for Node tests.
+ * Returns a Supabase client using the Service Role Key (admin privileges)
  */
-function createTestClient() {
-  const url = process.env.SUPABASE_URL
-  const key = process.env.SUPABASE_KEY
+export function createAdminClient(): SupabaseClient<Database> {
+  return createClient<Database>(SUPABASE_URL, SERVICE_KEY, {
+    auth: { persistSession: false },
+  });
+}
 
-  if (!url || !key) {
-    throw new Error('Missing SUPABASE_URL or SUPABASE_KEY in .env.test')
+/**
+ * Ensures the test user exists, then returns a client authenticated as that user.
+ */
+export async function getTestUserClient(): Promise<SupabaseClient<Database>> {
+  const admin = createAdminClient();
+
+  // Ensure user exists
+  const { data: existingUser, error: getUserError } = await admin.auth.admin
+    .getUserById(TEST_USER_ID)
+    .catch(() => ({ data: null, error: null }));
+
+  if (!existingUser) {
+    const { data, error } = await admin.auth.admin.createUser({
+      id: TEST_USER_ID,
+      email: TEST_USER_EMAIL,
+      password: TEST_USER_PASSWORD,
+      email_confirm: true,
+    });
+    if (error) throw error;
   }
 
-  // use supabase-js client (not @supabase/ssr)
-  return createClient<Database>(url, key)
+  // Sign in as test user to get JWT
+  const client = createClient<Database>(SUPABASE_URL, '', {
+    auth: { persistSession: false },
+  });
+  const { data: signInData, error: signInError } =
+    await client.auth.signInWithPassword({
+      email: TEST_USER_EMAIL,
+      password: TEST_USER_PASSWORD,
+    });
+
+  if (signInError || !signInData.session?.access_token) {
+    throw signInError || new Error('Failed to sign in test user');
+  }
+
+  // Return a client that uses the JWT (enforces RLS)
+  return createClient<Database>(SUPABASE_URL, signInData.session.access_token);
 }
 
 /**
- * Truncates one table.
+ * Type-safe table names
+ */
+export type TableName = keyof Database['public']['Tables'];
+
+/**
+ * Truncates a table using the admin client
  */
 export async function truncateTable(table: TableName) {
-  const supabase = createTestClient()
-  await supabase.from(table).delete().neq('id', '')
+  const admin = createAdminClient();
+  const { error } = await admin.from(table).delete().neq('id', '');
+  if (error) {
+    console.error(`Failed to truncate ${table}:`, error);
+    throw error;
+  }
 }
 
 /**
- * Clears all test data (order matters for foreign keys).
+ * Reset all test tables (order matters for foreign keys)
  */
 export async function resetDatabase() {
-  const supabase = createTestClient()
-
   const tables: TableName[] = [
     'conversation_tags',
     'note_page_tags',
@@ -41,26 +92,20 @@ export async function resetDatabase() {
     'note_sections',
     'tags',
     'ai_insights',
-  ]
+  ];
 
   for (const table of tables) {
-    await supabase.from(table).delete().neq('id', '')
+    await truncateTable(table);
   }
 }
 
 /**
- * Manually insert your known test user.
- * (You already created it in the Supabase dashboard.)
+ * Seed default data for the test user
  */
-export async function seedTestUser() {
-  const supabase = createTestClient()
-  const testUserId = process.env.TEST_USER_ID
-
-  if (!testUserId) throw new Error('Missing TEST_USER_ID in .env.test')
-
-  // Example: Insert a note or section tied to the test user
-  await supabase.from('note_sections').insert({
-    user_id: testUserId,
+export async function seedTestUserData() {
+  const client = await getTestUserClient();
+  await client.from('note_sections').insert({
+    user_id: TEST_USER_ID,
     name: 'Default Test Section',
-  })
+  });
 }
