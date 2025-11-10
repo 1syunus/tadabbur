@@ -39,12 +39,9 @@ export class SectionsService {
       .from('note_sections')
       .select('*')
       .eq('id', id)
-      .single()
+      .maybeSingle()
 
     if (error) {
-      if (error.code === 'PGRST116') {
-        return null
-      }
       console.error('[SectionsService] Error fetching section:', error)
       throw error
     }
@@ -109,5 +106,69 @@ export class SectionsService {
       console.error('[SectionsService] Error deleting section:', error)
       throw error
     }
+  }
+
+  /**
+ * Reorder sections
+ * Updates order_index for multiple sections
+ */
+  async reorderSections(
+    sectionOrders: Array<{ id: string; order_index: number }>
+  ): Promise<void> {
+    // Update each section's order_index
+    const updates = sectionOrders.map(({ id, order_index }) =>
+      this.supabase
+        .from('note_sections')
+        .update({ order_index })
+        .eq('id', id)
+    )
+
+    const results = await Promise.all(updates)
+
+    const errors = results.filter((r) => r.error)
+    if (errors.length > 0) {
+      console.error('[SectionsService] Error reordering sections:', errors)
+      throw new Error('Failed to reorder sections')
+    }
+  }
+
+  /**
+   * Get section with all its pages
+   * Useful for displaying a section's contents
+   */
+  async getSectionWithPages(id: string): Promise<(NoteSection & { note_pages: any[] }) | null> {
+    const { data, error } = await this.supabase
+      .from('note_sections')
+      .select(`
+        *,
+        note_pages (*)
+      `)
+      .eq('id', id)
+      .maybeSingle()
+
+    if (error) {
+      console.error('[SectionsService] Error fetching section with pages:', error)
+      throw error
+    }
+
+    return data
+  }
+
+  /**
+   * Count pages in a section
+   */
+  async getPageCount(sectionId: string): Promise<number> {
+    const { count, error } = await this.supabase
+      .from('note_pages')
+      .select('id', { count: 'exact', head: true })
+      .eq('section_id', sectionId)
+      .is('deleted_at', null)
+
+    if (error) {
+      console.error('[SectionsService] Error counting pages:', error)
+      throw error
+    }
+
+    return count ?? 0
   }
 }
