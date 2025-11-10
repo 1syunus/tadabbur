@@ -1,6 +1,5 @@
 ﻿import { NextRequest, NextResponse } from 'next/server'
 import { NotesService } from '@/lib/api/notes/service'
-import { createServerClient } from '@/lib/api/supabase/server'
 import { CreateNoteSchema } from '@/lib/validation/note'
 import { handleApiError } from '@/lib/api/errors'
 import { requireAuth } from '@/lib/api/auth'

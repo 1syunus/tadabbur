@@ -1,6 +1,5 @@
 import { createServerClient } from "@/lib/api/supabase/server";
 import { AuthError } from "./errors";
-import { SupabaseClient, User } from "@supabase/supabase-js";
 
 /**
  * Fetches the supabase client AND the authenticated user
