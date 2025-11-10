@@ -2,7 +2,9 @@
 import { NotesService } from '@/lib/api/notes/service'
 import { createServerClient } from '@/lib/api/supabase/server'
 import { CreateNoteSchema } from '@/lib/validation/note'
-import { z } from 'zod'
+import { handleApiError } from '@/lib/api/errors'
+import { requireAuth } from '@/lib/api/auth'
+
 
 /**
  * GET /api/notes
@@ -10,23 +12,14 @@ import { z } from 'zod'
  */
 export async function GET() {
   try {
-    const supabase = await createServerClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const {supabase} = await requireAuth()
 
     const notesService = new NotesService(supabase)
     const notes = await notesService.getAllNotes()
 
     return NextResponse.json({ notes })
   } catch (error) {
-    console.error('[GET /api/notes] Error:', error)
-    const message = process.env.NODE_ENV === 'development' && error instanceof Error
-      ? error.message
-      : 'Internal server error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return handleApiError(error, '[GET /api/notes] Error:')
   }
 }
 
@@ -36,13 +29,7 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
+    const {supabase, user} = await requireAuth()
     const body = await request.json()
     
     // Validate with Zod
@@ -62,10 +49,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ note }, { status: 201 })
   } catch (error) {
-    console.error('[POST /api/notes] Error:', error)
-    const message = process.env.NODE_ENV === 'development' && error instanceof Error
-      ? error.message
-      : 'Internal server error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return handleApiError(error, '[POST /api/notes] Error:')
   }
 }
