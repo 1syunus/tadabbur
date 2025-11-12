@@ -1,90 +1,97 @@
-import { SupabaseClient } from "@supabase/supabase-js";
-import { Database } from "@/types/supabase";
+export function createMockSupabaseClient(
+  mockData: any = null,
+  mockError: any = null,
+  mockCount: number | null = null
+) {
+  // Store the final result
+  let finalCount = mockCount ?? (Array.isArray(mockData) ? mockData.length : mockData ? 1 : 0)
+  let finalData = mockData
+  let finalError = mockError
 
-/**
- * Creates a mock Supabase client with chainable methods.
- * @param mockData Data to return from queries
- * @param mockError Optional error to simulate
- * @param mockUser Optional user for auth mocking (default: mock-user-id)
- * @returns jest.Mocked<SupabaseClient<Database>>
- */
+  // Create chainable mock that tracks method calls
+  const chain = {
+    // Query methods
+    select: jest.fn(function(this: any, columns?: string, options?: any) {
+        this.lastSelect = columns
+      // If head: true, we're doing a count query
+      if (options?.head) {
+        finalData = null
+      }
+      return this
+    }),
+    insert: jest.fn().mockReturnThis(),
+    update: jest.fn().mockReturnThis(),
+    delete: jest.fn(function(this: any) {
+        this.lastMethod = 'delete'
+        return this
+    }),
+    upsert: jest.fn().mockReturnThis(),
 
-interface ChainableQuery {
-  select: jest.Mock<any, any>;
-  insert: jest.Mock<any, any>;
-  update: jest.Mock<any, any>;
-  delete: jest.Mock<any, any>;
-  eq: jest.Mock<any, any>;
-  is: jest.Mock<any, any>;
-  not: jest.Mock<any, any>;
-  order: jest.Mock<any, any>;
-  limit: jest.Mock<any, any>;
-  single: jest.Mock<any, any>;
-  maybeSingle: jest.Mock<any, any>;
-}
+    // Filter methods
+    eq: jest.fn(function(){
+        if (this.lastMethod === 'delete') {
+            return Promise.resolve({data: null, error: finalError})
+        }
+        return this
+    }),
+    neq: jest.fn().mockReturnThis(),
+    gt: jest.fn().mockReturnThis(),
+    gte: jest.fn().mockReturnThis(),
+    lt: jest.fn().mockReturnThis(),
+    lte: jest.fn().mockReturnThis(),
+    like: jest.fn().mockReturnThis(),
+    ilike: jest.fn().mockReturnThis(),
+    is: jest.fn().mockReturnThis(),
+    in: jest.fn().mockReturnThis(),
+    contains: jest.fn().mockReturnThis(),
+    containedBy: jest.fn().mockReturnThis(),
+    range: jest.fn().mockReturnThis(),
+    match: jest.fn().mockReturnThis(),
+    not: jest.fn().mockReturnThis(),
+    or: jest.fn().mockReturnThis(),
+    filter: jest.fn().mockReturnThis(),
 
-// supabase response
-interface SupabaseResponse<T> {
-  data: T | null;
-  error: Error | null;
-  status: number;
-  statusText: string;
-  count: number | null;
-}
-
-export const createMockSupabaseClient = <T = any>(
-    mockData: T | null = null,
-    mockError: Error | null = null,
-    mockUser: {id: string} =  {id: "mock-user-id"},
-): jest.Mocked<SupabaseClient<Database>> => {
-    // helper for std response
-    const createResult = () => ({
-        data: mockData,
-        error: mockError,
-        status: mockError ? 400 : 200,
-        statusText: mockError ? "Bad Request" : "OK",
-        count: null,
-    })
-
-    const finalizer = jest.fn().mockResolvedValue(createResult())
-
-    const chainable: ChainableQuery = {
-        select: jest.fn((_columns?: string, options?: {count?: string; head?: boolean}) => {
-            // count query sim
-            if (options?.count === "exact" && options?.head) {
-                return Promise.resolve({
-                    count: mockData ? (Array.isArray(mockData) ? mockData.length : 1) : 0,
-                    error: mockError,
-                    status: mockError ? 400 : 200,
-                })
-            }
-            return chainable
-        }),
-        insert: jest.fn().mockReturnThis(),
-        update: jest.fn().mockReturnThis(),
-        delete: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        is: jest.fn().mockReturnThis(),
-        not: jest.fn().mockReturnThis(),
-        order: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        single: finalizer,
-        maybeSingle: finalizer,
-    }
-
-    const mockClient: Partial<jest.Mocked<SupabaseClient<Database>>> = {
-        from: jest.fn().mockImplementation((_table: string) => chainable),
-        auth: {
-            getUser: jest.fn().mockResolvedValue({
-                data: {user: mockUser},
-                error: null,
-            }),
-            getSession: jest.fn().mockResolvedValue({
-                data: {session: {user: mockUser}},
-                error: null,
-            }),
-        },
-    } as any
+    // Modifiers
+    order: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockReturnThis(),
     
-    return mockClient as jest.Mocked<SupabaseClient<Database>>
+    // Terminators
+    single: jest.fn(() => {
+        const data = Array.isArray(finalData) ? finalData[0] : finalData
+        return Promise.resolve({ data, error: finalError })
+    }),
+    maybeSingle: jest.fn(() => 
+        Promise.resolve({ data: finalData, error: finalError })
+    ),
+  }
+
+  // Make the chain thenable (implicit promise)
+  Object.assign(chain, {
+    then(resolve: any, reject: any) {
+      const result = { 
+        data: finalData, 
+        error: finalError,
+        count: finalCount,
+        status: finalError ? 400 : 200,
+        statusText: finalError ? 'Bad Request' : 'OK'
+      }
+      return Promise.resolve(result).then(resolve, reject)
+    },
+    catch(reject: any) {
+      return Promise.resolve({ data: finalData, error: finalError }).catch(reject)
+    },
+    finally(fn: any) {
+      return Promise.resolve({ data: finalData, error: finalError }).finally(fn)
+    },
+  })
+
+  return {
+    from: jest.fn(() => chain),
+    auth: {
+      getUser: jest.fn().mockResolvedValue({
+        data: { user: { id: 'test-user-id' } },
+        error: null,
+      }),
+    },
+  } as any
 }

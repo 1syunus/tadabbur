@@ -190,7 +190,10 @@ describe('MessagesService', () => {
   describe('getMessageCount', () => {
     it('should return message count for conversation', async () => {
       const mockClient = createMockSupabaseClient([
-        { id: '1' }, { id: '2' }, { id: '3' }, { id: '4' }
+        { id: '1', conversation_id: 'conv-1' },
+        { id: '2', conversation_id: 'conv-1' },
+        { id: '3', conversation_id: 'conv-1' },
+        { id: '4', conversation_id: 'conv-1' }
       ])
       const service = new MessagesService(mockClient)
 

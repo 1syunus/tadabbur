@@ -23,6 +23,9 @@ export class MessagesService {
       .order('created_at', { ascending: true })
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        throw new Error('Message not found')
+      }
       console.error('[MessagesService] Error fetching messages:', error)
       throw error
     }
@@ -64,6 +67,9 @@ export class MessagesService {
       .single()
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        throw new Error('Message not found')
+      }
       console.error('[MessagesService] Error creating message:', error)
       throw error
     }
@@ -87,11 +93,17 @@ export class MessagesService {
       .limit(limit)
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        throw new Error('Message not found')
+      }
       console.error('[MessagesService] Error fetching recent messages:', error)
       throw error
     }
 
     // Reverse to get chronological order
+    if (!data) {
+      return []
+    }
     return data.reverse()
   }
 
@@ -105,6 +117,9 @@ export class MessagesService {
       .eq('conversation_id', conversationId)
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        throw new Error('Message not found')
+      }
       console.error('[MessagesService] Error counting messages:', error)
       throw error
     }

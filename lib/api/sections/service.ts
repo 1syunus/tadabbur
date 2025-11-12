@@ -23,6 +23,9 @@ export class SectionsService {
       .order('order_index', { ascending: true })
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        throw new Error('Section not found')
+      }
       console.error('[SectionsService] Error fetching sections:', error)
       throw error
     }
@@ -42,6 +45,9 @@ export class SectionsService {
       .maybeSingle()
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        return null
+      }
       console.error('[SectionsService] Error fetching section:', error)
       throw error
     }
@@ -63,6 +69,9 @@ export class SectionsService {
       .single()
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        throw new Error('Section not found')
+      }
       console.error('[SectionsService] Error creating section:', error)
       throw error
     }
@@ -85,6 +94,9 @@ export class SectionsService {
       .single()
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        throw new Error('Section not found')
+      }
       console.error('[SectionsService] Error updating section:', error)
       throw error
     }
@@ -103,6 +115,9 @@ export class SectionsService {
       .eq('id', id)
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        throw new Error('Section not found')
+      }
       console.error('[SectionsService] Error deleting section:', error)
       throw error
     }
@@ -147,6 +162,9 @@ export class SectionsService {
       .maybeSingle()
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        return null
+      }
       console.error('[SectionsService] Error fetching section with pages:', error)
       throw error
     }
@@ -165,6 +183,9 @@ export class SectionsService {
       .is('deleted_at', null)
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        throw new Error('Section not found')
+      }
       console.error('[SectionsService] Error counting pages:', error)
       throw error
     }

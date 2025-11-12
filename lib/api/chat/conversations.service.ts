@@ -23,6 +23,9 @@ export class ConversationsService {
       .order('updated_at', { ascending: false })
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        throw new Error('Conversation not found')
+      }
       console.error('[ConversationsService] Error fetching conversations:', error)
       throw error
     }
@@ -41,6 +44,9 @@ export class ConversationsService {
       .order('updated_at', { ascending: false })
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        throw new Error('Conversation not found')
+      }
       console.error('[ConversationsService] Error fetching archived conversations:', error)
       throw error
     }
@@ -59,10 +65,7 @@ export class ConversationsService {
       .single()
 
     if (error) {
-      if (error.code === 'PGRST116') {
-        return null
-      }
-      console.error('[ConversationsService] Error fetching conversation:', error)
+      if (error.code === 'PGRST116') return null
       throw error
     }
 
@@ -118,9 +121,9 @@ export class ConversationsService {
   async archiveConversation(id: string): Promise<Conversation> {
     const { data, error } = await this.supabase
       .from('conversations')
-      .update({ archived: true })
+      .update({ archived: true, updated_at: new Date().toISOString() })
       .eq('id', id)
-      .select()
+      .select('*')
       .single()
 
     if (error) {

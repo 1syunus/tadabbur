@@ -41,7 +41,7 @@ describe('NotesService - Edge Cases', () => {
       const service = new NotesService(mockClient)
 
       // Should throw because RLS/query won't find deleted note
-      await expect(service.softDeleteNote('already-deleted')).rejects.toThrow()
+      await expect(service.softDeleteNote('already-deleted')).rejects.toThrow('Note not found')
     })
   })
 
@@ -51,7 +51,7 @@ describe('NotesService - Edge Cases', () => {
       const mockClient = createMockSupabaseClient(null, mockError)
       const service = new NotesService(mockClient)
 
-      await expect(service.updateNote('fake-id', { title: 'New' })).rejects.toThrow()
+      await expect(service.updateNote('fake-id', { title: 'New' })).rejects.toThrow('Note not found')
     })
 
     it('should not throw when permanently deleting non-existent note', async () => {

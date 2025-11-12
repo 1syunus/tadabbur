@@ -1,5 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { Database } from '@/types/supabase'
+import { NotFoundError } from '../errors'
+import { notFound } from 'next/navigation'
 
 type NotePage = Database['public']['Tables']['note_pages']['Row']
 type NotePageInsert = Database['public']['Tables']['note_pages']['Insert']
@@ -16,6 +18,10 @@ export class NotesService {
       .order('created_at', { ascending: false })
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        console.error('[NotesService] Note not found for soft delete:', error)
+        throw new NotFoundError('Note not found')
+      }
       console.error('[NotesService] Error fetching notes:', error)
       throw error
     }
@@ -33,8 +39,8 @@ export class NotesService {
 
     if (error) {
       // not found code
-      if (error.code === 'PGRST116') {
-        return null
+     if (error.code === 'PGRST116') {
+        throw new NotFoundError('Note not found')
       }
       console.error('[NotesService] Error fetching note:', error)
       throw error
@@ -53,6 +59,9 @@ export class NotesService {
       .single()
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        throw new NotFoundError('Note not found')
+      }
       console.error('[NotesService] Error creating note:', error)
       throw error
     }
@@ -69,6 +78,9 @@ export class NotesService {
       .single()
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        throw new NotFoundError('Note not found')
+      }
       console.error('[NotesService] Error updating note:', error)
       throw error
     }
@@ -85,6 +97,9 @@ export class NotesService {
       .single()
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        throw new NotFoundError('Note not found')
+      }
       console.error('[NotesService] Error soft deleting note:', error)
       throw error
     }
@@ -99,6 +114,9 @@ export class NotesService {
       .eq('id', id)
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        throw new NotFoundError('Note not found')
+      }
       console.error('[NotesService] Error permanently deleting note:', error)
       throw error
     }
@@ -113,6 +131,9 @@ export class NotesService {
       .order('order_index', { ascending: true })
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        throw new NotFoundError('Note not found')
+      }
       console.error('[NotesService] Error fetching section notes:', error)
       throw error
     }
@@ -129,6 +150,9 @@ export class NotesService {
       .order('deleted_at', { ascending: false })
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        throw new NotFoundError('Note not found')
+      }
       console.error('[NotesService] Error fetching deleted notes:', error)
       throw error
     }
@@ -146,6 +170,9 @@ export class NotesService {
       .single()
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        throw new NotFoundError('Note not found')
+      }
       console.error('[NotesService] Error restoring note:', error)
       throw error
     }
