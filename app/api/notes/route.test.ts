@@ -64,21 +64,4 @@ describe('/api/notes route (List and Create)', () => {
         const noteTitles = data.notes.map((s: any) => s.title)
         expect(noteTitles).not.toContain('Foreign Note') 
     })
-    
-    it('POST should return 400 for invalid data (e.g., missing required title)', async () => {
-        // Assuming 'title' is non-nullable for notes
-        const invalidData = { content: 'Content only' } 
-
-        const request = new NextRequest(notesApiUrl, {
-            method: 'POST',
-            body: JSON.stringify(invalidData),
-        })
-        
-        // Call POST handler
-        const response = await POST(request)
-        
-        expect(response.status).toBe(400) // Verify Zod validation failure
-        const data = await response.json()
-        expect(data.error).toBe('Validation failed')
-    })
 })

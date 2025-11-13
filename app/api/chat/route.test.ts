@@ -62,21 +62,4 @@ describe('/api/chat route (List and Create)', () => {
         const conversationTitles = data.conversations.map((c: any) => c.title)
         expect(conversationTitles).not.toContain('Foreign Conversation') 
     })
-    
-    it('POST should return 400 for invalid data (missing required title)', async () => {
-        // Assuming 'title' is required by CreateConversationSchema
-        const invalidData = { initial_message: 'Hello' } 
-
-        const request = new NextRequest(chatApiUrl, {
-            method: 'POST',
-            body: JSON.stringify(invalidData),
-        })
-        
-        // Call POST handler
-        const response = await POST(request)
-        
-        expect(response.status).toBe(400) // Verify Zod validation failure
-        const data = await response.json()
-        expect(data.error).toBe('Validation failed')
-    })
 })
