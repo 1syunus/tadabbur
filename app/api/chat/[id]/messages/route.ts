@@ -10,9 +10,9 @@ type RouteContext = {
 
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
-    const {supabase} = await requireAuth()
+    const {supabase, user} = await requireAuth() // Get user too
     const { id: conversationId } = await context.params
-
+    
     const validationResult = ConversationIdSchema.safeParse({ id: conversationId })
     if (!validationResult.success) {
       return NextResponse.json(
@@ -20,10 +20,26 @@ export async function GET(request: NextRequest, context: RouteContext) {
         { status: 400 }
       )
     }
-
+    
+    // CHECK CONVERSATION OWNERSHIP FIRST
+    const { data: conversation, error: convError } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('id', conversationId)
+      .eq('user_id', user.id) // Must belong to authenticated user
+      .single()
+    
+    if (convError || !conversation) {
+      return NextResponse.json(
+        { error: 'Conversation not found' },
+        { status: 404 }
+      )
+    }
+    
+    // Now fetch messages
     const messagesService = new MessagesService(supabase)
     const messages = await messagesService.getConversationMessages(conversationId)
-
+    
     return NextResponse.json({ messages })
   } catch (error) {
     return handleApiError(error, '[GET /api/chat/[id]/messages]:')
@@ -32,11 +48,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
-    const {supabase} = await requireAuth()
-
+    const {supabase, user} = await requireAuth()
     const { id: conversationId } = await context.params
     const body = await request.json()
-
+    
     const idValidation = ConversationIdSchema.safeParse({ id: conversationId })
     if (!idValidation.success) {
       return NextResponse.json(
@@ -44,24 +59,35 @@ export async function POST(request: NextRequest, context: RouteContext) {
         { status: 400 }
       )
     }
-
-    const bodyValidation = CreateMessageSchema.safeParse({
-      ...body,
-      conversation_id: conversationId,
-    })
+    
+    // CHECK CONVERSATION OWNERSHIP
+    const { data: conversation, error: convError } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('id', conversationId)
+      .eq('user_id', user.id)
+      .single()
+    
+    if (convError || !conversation) {
+      return NextResponse.json(
+        { error: 'Conversation not found' },
+        { status: 404 }
+      )
+    }
+    
+    // Validate message body
+    const bodyWithConvoId = {...body, conversation_id: conversationId}
+    const bodyValidation = CreateMessageSchema.safeParse(bodyWithConvoId)
     if (!bodyValidation.success) {
       return NextResponse.json(
-        {
-          error: 'Validation failed',
-          details: bodyValidation.error.issues,
-        },
+        { error: 'Validation failed', details: bodyValidation.error.issues },
         { status: 400 }
       )
     }
-
+    
     const messagesService = new MessagesService(supabase)
     const message = await messagesService.createMessage(bodyValidation.data)
-
+    
     return NextResponse.json({ message }, { status: 201 })
   } catch (error) {
     return handleApiError(error, '[POST /api/chat/[id]/messages]:')
