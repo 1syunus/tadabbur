@@ -1,18 +1,16 @@
 import { GET, PATCH, DELETE } from '@/app/api/notes/[id]/route'
-import { resetDatabase, seedTestUserData, getTestUserClient } from '@/lib/helpers/db'
+import { resetDatabase, seedTestUserData, getTestUserClient, createAdminClient } from '@/lib/helpers/db'
 import { NextRequest } from 'next/server'
 
 let testNoteId: string
 
-const emptyRequest = new NextRequest('http://localhost', { method: 'GET' })
-
 beforeAll(async () => {
   await resetDatabase()
-  const client = await getTestUserClient()
   await seedTestUserData()
+  const admin = createAdminClient()
   
   // Create a note to test with
-  const { data, error } = await client
+  const { data, error } = await admin
     .from('note_pages')
     .insert({
       user_id: process.env.TEST_USER_ID!,
@@ -38,32 +36,31 @@ describe('/api/notes/[id] route', () => {
     
     expect(response.status).toBe(200)
     const data = await response.json()
-    
     expect(data.note.id).toBe(testNoteId)
   })
 
   it('PATCH updates the note', async () => {
     const request = makeRequest({ title: 'Updated Title' })
     const response = await PATCH(request, { params: Promise.resolve({ id: testNoteId }) })
-    const data = await response.json()
     
+    expect(response.status).toBe(200)
+    const data = await response.json()
     expect(data.note.title).toBe('Updated Title')
   })
 
   it('DELETE hard deletes the note', async () => {
     const response = await DELETE(null as any, { params: Promise.resolve({ id: testNoteId }) })
     
-    expect(data.note.id).toBe(testNoteId)
-    
-    // Verify it is soft-deleted
-    const client = await getTestUserClient()
-    const { data: note } = await client
+    expect(response.status).toBe(200)
+
+    const admin = await getTestUserClient()
+    const { data: note } = await admin
       .from('note_pages')
       .select('*')
       .eq('id', testNoteId)
       .single()
     
-    expect(note?.deleted_at).not.toBeNull()
+    expect(note).toBeNull()
   })
 
   it('GET returns 404 for non-existent ID', async () => {

@@ -1,18 +1,20 @@
 import { GET, PATCH, DELETE } from '@/app/api/sections/[id]/route'
-import { resetDatabase, seedTestUserData, getTestUserClient } from '@/lib/helpers/db'
+import { resetDatabase, seedTestUserData, getTestUserClient, createAdminClient } from '@/lib/helpers/db'
 import { NextRequest } from 'next/server'
 
 let testSectionId: string
 
-const emptyRequest = new NextRequest('http://localhost', { method: 'GET' })
+let userClient: Awaited<ReturnType<typeof getTestUserClient>>
+let adminClient: ReturnType<typeof createAdminClient>
 
 beforeAll(async () => {
     await resetDatabase()
-    const client = await getTestUserClient()
-
+    userClient = await getTestUserClient()
     await seedTestUserData()
+
+    adminClient = createAdminClient()
     
-    const { data, error } = await client
+    const { data, error } = await userClient
       .from('note_sections') 
       .insert({
         user_id: process.env.TEST_USER_ID!,
@@ -31,7 +33,7 @@ const makeRequest = (body?: any, method: 'PATCH' | 'POST' = 'PATCH') =>
         body: JSON.stringify(body ?? {}),
     })
 
-describe('/api/sections/[id] route (Hard Delete)', () => {
+describe('/api/sections/[id] route', () => {
     it('GET returns the section', async () => {
         const response = await GET(null as any, { params: Promise.resolve({ id: testSectionId }) })
         const data = await response.json()
@@ -55,10 +57,10 @@ describe('/api/sections/[id] route (Hard Delete)', () => {
         const data = await response.json()
         
         expect(response.status).toBe(200)
-        expect(data.section.id).toBe(testSectionId)
+        expect(data.success).toBe(true)
         
-        const client = await getTestUserClient()
-        const { data: section } = await client
+        const userClient = await getTestUserClient()
+        const { data: section } = await userClient
           .from('note_sections') 
           .select('*')
           .eq('id', testSectionId)

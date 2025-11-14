@@ -1,7 +1,7 @@
 ﻿import { NextRequest, NextResponse } from 'next/server'
 import { NotesService } from '@/lib/api/notes/service'
 import { UpdateNoteSchema, NoteIdSchema } from '@/lib/validation/note'
-import { handleApiError } from '@/lib/api/errors'
+import { BadRequestError, handleApiError, NotFoundError } from '@/lib/api/errors'
 import { requireAuth } from '@/lib/api/auth'
 
 type RouteContext = {
@@ -15,7 +15,7 @@ export async function GET(_: NextRequest, context: RouteContext) {
   try {
     const {supabase} = await requireAuth()
 
-    const params = await context.params
+    const {id} = await context.params
 
     // Validate ID param
   const validationResult = NoteIdSchema.safeParse({ id })
@@ -24,7 +24,7 @@ export async function GET(_: NextRequest, context: RouteContext) {
      }
 
     const notesService = new NotesService(supabase)
-    const note = await notesService.getNoteById(paramValidation.data.id)
+    const note = await notesService.getNoteById(id)
 
     if (!note) {
       throw new NotFoundError('Note not found')
@@ -43,24 +43,25 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
     const {supabase} = await requireAuth()
 
-    const params = await context.params
-
-    const paramValidation = NoteIdSchema.safeParse(context.params)
-    if (!paramValidation.success) {
-      return NextResponse.json({ error: 'Invalid note ID' }, { status: 400 })
+    const {id} = await context.params
+    const body = await request.json()
+    
+    const idValidation = NoteIdSchema.safeParse({id})
+    if (!idValidation.success) {
+      throw new BadRequestError('Invalid note ID')
     }
 
-    const body = await request.json()
-    const validation = UpdateNoteSchema.safeParse(body)
-    if (!validation.success) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: validation.error.issues },
-        { status: 400 }
-      )
+    
+    const bodyValidation = UpdateNoteSchema.safeParse(body)
+    if (!bodyValidation.success) {
+      throw new BadRequestError('Validation failed')
     }
 
     const notesService = new NotesService(supabase)
-    const note = await notesService.updateNote(paramValidation.data.id, validation.data)
+    const note = await notesService.updateNote(
+      id,
+      bodyValidation.data
+    )
 
     return NextResponse.json({ note })
   } catch (error) {
@@ -71,11 +72,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 /**
  * DELETE /api/notes/[id]
  */
-export async function DELETE(_: NextRequest, context: RouteContext) {
+export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const {supabase} = await requireAuth()
 
-    const params = await context.params
+    const {id} = await context.params
 
     const validationResult = NoteIdSchema.safeParse({id})
     if (!validationResult.success) {
@@ -83,7 +84,7 @@ export async function DELETE(_: NextRequest, context: RouteContext) {
     }
 
     const notesService = new NotesService(supabase)
-    const note = await notesService.softDeleteNote(paramValidation.data.id)
+    const note = await notesService.permanentlyDeleteNote(id)
 
     return NextResponse.json({ note })
   } catch (error) {

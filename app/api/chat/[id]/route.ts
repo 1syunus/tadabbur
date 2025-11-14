@@ -72,9 +72,9 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     }
 
     const conversationsService = new ConversationsService(supabase)
-    await conversationsService.deleteConversation(id)
+    const conversation = await conversationsService.archiveConversation(id)
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, conversation })
   } catch (error) {
     return handleApiError(error, '[DELETE /api/chat/[id]]:')
   }

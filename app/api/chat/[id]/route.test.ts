@@ -1,16 +1,16 @@
 import { GET, PATCH, DELETE } from '@/app/api/chat/[id]/route'
-import { resetDatabase, seedTestUserData, getTestUserClient } from '@/lib/helpers/db'
+import { resetDatabase, seedTestUserData, createAdminClient } from '@/lib/helpers/db'
 import { NextRequest } from 'next/server'
 
 let testConversationId: string
 
 beforeAll(async () => {
     await resetDatabase()
-    const client = await getTestUserClient()
+    const admin = createAdminClient()
     await seedTestUserData()
     
-    // Create a conversation to test with
-    const { data, error } = await client
+    // Create an auth'd conversation to test with
+    const { data, error } = await admin
       .from('conversations')
       .insert({
         user_id: process.env.TEST_USER_ID!,
@@ -63,13 +63,12 @@ describe('/api/chat/[id] route (Soft Delete)', () => {
         expect(response.status).toBe(200)
         expect(data.success).toBe(true) 
         
-        // 💡 VERIFY SOFT DELETION: Check the database row for the 'archived' flag
-        const client = await getTestUserClient()
-        const { data: conversation } = await client
+        const admin = await createAdminClient()
+        const { data: conversation } = await admin
           .from('conversations')
           .select('archived')
           .eq('id', testConversationId)
-          .single()
+          .maybeSingle()
         
         // The conversation should still exist, but the archived flag must be true
         expect(conversation?.archived).toBe(true) 
@@ -77,7 +76,7 @@ describe('/api/chat/[id] route (Soft Delete)', () => {
 
     // --- Validation and Error Handling ---
     it('GET returns 404 for non-existent ID', async () => {
-        const fakeId = '00000000-0000-0000-0000-000000000000'
+        const fakeId = crypto.randomUUID()
         const response = await GET(null as any, {params: Promise.resolve({id: fakeId})})
 
         expect(response.status).toBe(404)
