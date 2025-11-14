@@ -22,7 +22,7 @@ beforeAll(async () => {
         title: 'Foreign Note', 
         content: 'Should not be seen'
     })
-})
+}, 20000)
 
 afterAll(async () => {
     await resetDatabase()

@@ -21,7 +21,7 @@ beforeAll(async () => {
         user_id: '11111111-1111-1111-1111-111111111111', 
         title: 'Foreign Conversation', 
     })
-})
+}, 20000)
 
 afterAll(async () => {
     await resetDatabase()

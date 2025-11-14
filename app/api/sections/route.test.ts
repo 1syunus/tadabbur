@@ -18,7 +18,7 @@ beforeAll(async () => {
         user_id: '11111111-1111-1111-1111-111111111111', 
         name: 'Foreign Section' 
     })
-})
+}, 20000)
 
 afterAll(async () => {
     await resetDatabase()

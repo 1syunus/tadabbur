@@ -24,7 +24,7 @@ beforeAll(async () => {
   
   if (error) throw error
   testNoteId = data.id
-})
+}, 20000)
 
 const makeRequest = (body?: any, method: 'PATCH' | 'POST' = 'PATCH') =>
   new NextRequest('http://localhost/api/notes/' + testNoteId, {

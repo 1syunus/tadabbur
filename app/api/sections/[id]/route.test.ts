@@ -23,7 +23,7 @@ beforeAll(async () => {
     
     if (error) throw error
     testSectionId = data.id
-})
+}, 20000)
 
 const makeRequest = (body?: any, method: 'PATCH' | 'POST' = 'PATCH') =>
     new NextRequest('http://localhost/api/sections/' + testSectionId, {

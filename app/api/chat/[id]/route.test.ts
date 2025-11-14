@@ -21,7 +21,7 @@ beforeAll(async () => {
     
     if (error) throw error
     testConversationId = data.id
-})
+}, 20000)
 
 // Helper to create a request object for PATCH
 const makeRequest = (body: any) =>
