@@ -68,7 +68,7 @@ describe('/api/sections/[id] route (Hard Delete)', () => {
     })
 
     it('GET returns 404 for non-existent ID', async () => {
-        const fakeId = '00000000-0000-0000-0000-000000000000'
+        const fakeId = crypto.randomUUID()
         const response = await GET(null as any, {params: Promise.resolve({id: fakeId})})
 
         expect(response.status).toBe(404)
