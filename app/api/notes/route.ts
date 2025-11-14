@@ -1,9 +1,8 @@
 ﻿import { NextRequest, NextResponse } from 'next/server'
 import { NotesService } from '@/lib/api/notes/service'
 import { CreateNoteSchema } from '@/lib/validation/note'
-import { handleApiError } from '@/lib/api/errors'
+import { BadRequestError, handleApiError } from '@/lib/api/errors'
 import { requireAuth } from '@/lib/api/auth'
-
 
 /**
  * GET /api/notes
@@ -34,10 +33,7 @@ export async function POST(request: NextRequest) {
     // Validate with Zod
     const validation = CreateNoteSchema.safeParse(body)
     if (!validation.success) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: validation.error.issues },
-        { status: 400 }
-      )
+      throw new BadRequestError('Validation failed')
     }
 
     const notesService = new NotesService(supabase)

@@ -1,7 +1,7 @@
 ﻿import { NextRequest, NextResponse } from 'next/server'
 import { SectionsService } from '@/lib/api/sections/service'
 import { CreateSectionSchema } from '@/lib/validation/section'
-import { handleApiError } from '@/lib/api/errors'
+import { BadRequestError, handleApiError } from '@/lib/api/errors'
 import { requireAuth } from '@/lib/api/auth'
 
 export async function GET() {
@@ -25,13 +25,7 @@ export async function POST(request: NextRequest) {
 
     const validationResult = CreateSectionSchema.safeParse(body)
     if (!validationResult.success) {
-      return NextResponse.json(
-        {
-          error: 'Validation failed',
-          details: validationResult.error.issues,
-        },
-        { status: 400 }
-      )
+      throw new BadRequestError('Validation failed')
     }
 
     const sectionsService = new SectionsService(supabase)

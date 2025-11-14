@@ -18,19 +18,16 @@ export async function GET(_: NextRequest, context: RouteContext) {
     const params = await context.params
 
     // Validate ID param
-    const paramValidation = NoteIdSchema.safeParse(context.params)
-    if (!paramValidation.success) {
-      return NextResponse.json(
-        { error: 'Invalid note ID' },
-        { status: 400 }
-      )
-    }
+  const validationResult = NoteIdSchema.safeParse({ id })
+     if (!validationResult.success) { 
+       throw new BadRequestError('Invalid note ID')
+     }
 
     const notesService = new NotesService(supabase)
     const note = await notesService.getNoteById(paramValidation.data.id)
 
     if (!note) {
-      return NextResponse.json({ error: 'Note not found' }, { status: 404 })
+      throw new NotFoundError('Note not found')
     }
 
     return NextResponse.json({ note })
@@ -80,9 +77,9 @@ export async function DELETE(_: NextRequest, context: RouteContext) {
 
     const params = await context.params
 
-    const paramValidation = NoteIdSchema.safeParse(context.params)
-    if (!paramValidation.success) {
-      return NextResponse.json({ error: 'Invalid note ID' }, { status: 400 })
+    const validationResult = NoteIdSchema.safeParse({id})
+    if (!validationResult.success) {
+      throw new BadRequestError('Invalid note ID')
     }
 
     const notesService = new NotesService(supabase)

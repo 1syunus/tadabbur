@@ -1,14 +1,14 @@
 ﻿import { NextRequest, NextResponse } from 'next/server'
 import { SectionsService } from '@/lib/api/sections/service'
 import { UpdateSectionSchema, SectionIdSchema } from '@/lib/validation/section'
-import { handleApiError } from '@/lib/api/errors'
+import { BadRequestError, handleApiError, NotFoundError } from '@/lib/api/errors'
 import { requireAuth } from '@/lib/api/auth'
 
 type RouteContext = {
   params: Promise<{ id: string }>
 }
 
-export async function GET(request: NextRequest, context: RouteContext) {
+export async function GET(_: NextRequest, context: RouteContext) {
   try {
     const {supabase} = await requireAuth()
 
@@ -16,17 +16,14 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     const validationResult = SectionIdSchema.safeParse({ id })
     if (!validationResult.success) {
-      return NextResponse.json(
-        { error: 'Invalid section ID', details: validationResult.error.issues },
-        { status: 400 }
-      )
+      throw new BadRequestError('Invalid section ID')
     }
 
     const sectionsService = new SectionsService(supabase)
     const section = await sectionsService.getSectionById(id)
 
     if (!section) {
-      return NextResponse.json({ error: 'Section not found' }, { status: 404 })
+      throw new NotFoundError('Section not found')
     }
 
     return NextResponse.json({ section })
@@ -44,21 +41,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     const idValidation = SectionIdSchema.safeParse({ id })
     if (!idValidation.success) {
-      return NextResponse.json(
-        { error: 'Invalid section ID', details: idValidation.error.issues },
-        { status: 400 }
-      )
+      throw new BadRequestError('Invalid section ID')
     }
 
     const bodyValidation = UpdateSectionSchema.safeParse(body)
     if (!bodyValidation.success) {
-      return NextResponse.json(
-        {
-          error: 'Validation failed',
-          details: bodyValidation.error.issues,
-        },
-        { status: 400 }
-      )
+      throw new BadRequestError('Validation failed')
     }
 
     const sectionsService = new SectionsService(supabase)
@@ -78,16 +66,13 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     const validationResult = SectionIdSchema.safeParse({ id })
     if (!validationResult.success) {
-      return NextResponse.json(
-        { error: 'Invalid section ID', details: validationResult.error.issues },
-        { status: 400 }
-      )
+      throw new BadRequestError('Invalid section ID')
     }
 
     const sectionsService = new SectionsService(supabase)
     await sectionsService.deleteSection(id)
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true }, {status: 200})
   } catch (error) {
     return handleApiError(error, '[DELETE /api/sections/[id]]:')
   }

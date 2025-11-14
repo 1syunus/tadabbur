@@ -1,7 +1,7 @@
 ﻿import { NextRequest, NextResponse } from 'next/server'
 import { ConversationsService } from '@/lib/api/chat/conversations.service'
 import { UpdateConversationSchema, ConversationIdSchema } from '@/lib/validation/chat'
-import { handleApiError } from '@/lib/api/errors'
+import { BadRequestError, handleApiError, NotFoundError } from '@/lib/api/errors'
 import { requireAuth } from '@/lib/api/auth'
 
 type RouteContext = {
@@ -15,17 +15,14 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     const validationResult = ConversationIdSchema.safeParse({ id })
     if (!validationResult.success) {
-      return NextResponse.json(
-        { error: 'Invalid conversation ID', details: validationResult.error.issues },
-        { status: 400 }
-      )
+      throw new BadRequestError('Invalid conversation ID')
     }
 
     const conversationsService = new ConversationsService(supabase)
     const conversation = await conversationsService.getConversationById(id)
 
     if (!conversation) {
-      return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
+      throw new NotFoundError('Conversation not found')
     }
 
     return NextResponse.json({ conversation })
@@ -43,21 +40,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     const idValidation = ConversationIdSchema.safeParse({ id })
     if (!idValidation.success) {
-      return NextResponse.json(
-        { error: 'Invalid conversation ID', details: idValidation.error.issues },
-        { status: 400 }
-      )
+      throw new BadRequestError('Invalid conversation ID')
     }
 
     const bodyValidation = UpdateConversationSchema.safeParse(body)
     if (!bodyValidation.success) {
-      return NextResponse.json(
-        {
-          error: 'Validation failed',
-          details: bodyValidation.error.issues,
-        },
-        { status: 400 }
-      )
+      throw new BadRequestError('Validation failed')
     }
 
     const conversationsService = new ConversationsService(supabase)
@@ -80,10 +68,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     const validationResult = ConversationIdSchema.safeParse({ id })
     if (!validationResult.success) {
-      return NextResponse.json(
-        { error: 'Invalid conversation ID', details: validationResult.error.issues },
-        { status: 400 }
-      )
+      throw new BadRequestError('Invalid conversation ID')
     }
 
     const conversationsService = new ConversationsService(supabase)
