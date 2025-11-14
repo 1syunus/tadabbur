@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { MessagesService } from '@/lib/api/chat/messages.service'
 import { CreateMessageSchema, ConversationIdSchema } from '@/lib/validation/chat'
-import { handleApiError } from '@/lib/api/errors'
+import { BadRequestError, handleApiError, NotFoundError } from '@/lib/api/errors'
 import { requireAuth } from '@/lib/api/auth'
 
 type RouteContext = {
@@ -15,10 +15,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     
     const validationResult = ConversationIdSchema.safeParse({ id: conversationId })
     if (!validationResult.success) {
-      return NextResponse.json(
-        { error: 'Invalid conversation ID', details: validationResult.error.issues },
-        { status: 400 }
-      )
+      throw new BadRequestError('Invalid conversation ID')
     }
     
     // CHECK CONVERSATION OWNERSHIP FIRST
@@ -30,10 +27,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       .single()
     
     if (convError || !conversation) {
-      return NextResponse.json(
-        { error: 'Conversation not found' },
-        { status: 404 }
-      )
+      throw new NotFoundError('Conversation not found')
     }
     
     // Now fetch messages
@@ -54,10 +48,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     
     const idValidation = ConversationIdSchema.safeParse({ id: conversationId })
     if (!idValidation.success) {
-      return NextResponse.json(
-        { error: 'Invalid conversation ID', details: idValidation.error.issues },
-        { status: 400 }
-      )
+      throw new BadRequestError('Invalid conversation ID')
     }
     
     // CHECK CONVERSATION OWNERSHIP
@@ -69,20 +60,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
       .single()
     
     if (convError || !conversation) {
-      return NextResponse.json(
-        { error: 'Conversation not found' },
-        { status: 404 }
-      )
+      throw new NotFoundError('Conversation not found')
     }
     
     // Validate message body
     const bodyWithConvoId = {...body, conversation_id: conversationId}
     const bodyValidation = CreateMessageSchema.safeParse(bodyWithConvoId)
     if (!bodyValidation.success) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: bodyValidation.error.issues },
-        { status: 400 }
-      )
+      throw new BadRequestError('Validation failed')
     }
     
     const messagesService = new MessagesService(supabase)
