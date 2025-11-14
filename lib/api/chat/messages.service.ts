@@ -44,9 +44,7 @@ export class MessagesService {
       .single()
 
     if (error) {
-      if (error.code === 'PGRST116') {
-        return null
-      }
+      if (error.code === 'PGRST116') return null
       console.error('[MessagesService] Error fetching message:', error)
       throw error
     }

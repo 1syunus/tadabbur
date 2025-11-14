@@ -1,7 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { Database } from '@/types/supabase'
 import { NotFoundError } from '../errors'
-import { notFound } from 'next/navigation'
 
 type NotePage = Database['public']['Tables']['note_pages']['Row']
 type NotePageInsert = Database['public']['Tables']['note_pages']['Insert']
