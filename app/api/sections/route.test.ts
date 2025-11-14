@@ -27,7 +27,7 @@ afterAll(async () => {
 describe('/api/sections route', () => {
 
     it('POST should create a new section', async () => {
-        const newSectionData = { name: 'New Section via API', color: 'green' }
+        const newSectionData = { name: 'New Section via API', color: '#00FF00' }
         
         const request = new NextRequest('http://localhost/api/sections', {
             method: 'POST',

@@ -41,13 +41,13 @@ describe('/api/sections/[id] route (Hard Delete)', () => {
     })
 
     it('PATCH updates the section name and color', async () => {
-        const request = makeRequest({ name: 'Updated Section Name', color: 'blue' })
+        const request = makeRequest({ name: 'Updated Section Name', color: '#0000FF' })
         const response = await PATCH(request, { params: Promise.resolve({ id: testSectionId }) })
         const data = await response.json()
         
         expect(response.status).toBe(200)
         expect(data.section.name).toBe('Updated Section Name')
-        expect(data.section.color).toBe('blue')
+        expect(data.section.color).toBe('#0000FF')
     })
 
     it('DELETE permanently removes the section', async () => {
