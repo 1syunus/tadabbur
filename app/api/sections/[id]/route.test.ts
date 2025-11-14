@@ -28,7 +28,7 @@ beforeAll(async () => {
 const makeRequest = (body?: any, method: 'PATCH' | 'POST' = 'PATCH') =>
     new NextRequest('http://localhost/api/sections/' + testSectionId, {
         method,
-        body: body ? JSON.stringify(body) : undefined,
+        body: JSON.stringify(body ?? {}),
     })
 
 describe('/api/sections/[id] route (Hard Delete)', () => {
