@@ -13,7 +13,7 @@ export async function createServerClient() {
   // safety check
   if (
     process.env.NODE_ENV !== 'test' &&
-    process.env.SUPERBASE_URL?.includes('zbgztqrkffyjdaklbxly')
+    process.env.SUPABASE_URL?.includes('zbgztqrkffyjdaklbxly')
   ) {
     throw new Error(
       '[Safety Check] Attempting to connect to TEST database in non-test environment!'
