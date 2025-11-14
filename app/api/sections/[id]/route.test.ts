@@ -33,7 +33,7 @@ const makeRequest = (body?: any, method: 'PATCH' | 'POST' = 'PATCH') =>
 
 describe('/api/sections/[id] route (Hard Delete)', () => {
     it('GET returns the section', async () => {
-        const response = await GET(emptyRequest, { params: Promise.resolve({ id: testSectionId }) })
+        const response = await GET(null as any, { params: Promise.resolve({ id: testSectionId }) })
         const data = await response.json()
         
         expect(response.status).toBe(200)
@@ -51,7 +51,7 @@ describe('/api/sections/[id] route (Hard Delete)', () => {
     })
 
     it('DELETE permanently removes the section', async () => {
-        const response = await DELETE(emptyRequest, { params: Promise.resolve({ id: testSectionId }) })
+        const response = await DELETE(null as any, { params: Promise.resolve({ id: testSectionId }) })
         const data = await response.json()
         
         expect(response.status).toBe(200)
@@ -69,7 +69,7 @@ describe('/api/sections/[id] route (Hard Delete)', () => {
 
     it('GET returns 404 for non-existent ID', async () => {
         const fakeId = '00000000-0000-0000-0000-000000000000'
-        const response = await GET(emptyRequest, {params: Promise.resolve({id: fakeId})})
+        const response = await GET(null as any, {params: Promise.resolve({id: fakeId})})
 
         expect(response.status).toBe(404)
         const data = await response.json()
@@ -78,7 +78,7 @@ describe('/api/sections/[id] route (Hard Delete)', () => {
 
     it('GET returns 400 for invalid ID format', async () => {
         const invalidId = 'not-a-uuid'
-        const response = await GET(emptyRequest, { params: Promise.resolve({ id: invalidId }) })
+        const response = await GET(null as any, { params: Promise.resolve({ id: invalidId }) })
         
         expect(response.status).toBe(400)
         const data = await response.json()

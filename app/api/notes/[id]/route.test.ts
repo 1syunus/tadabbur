@@ -34,7 +34,9 @@ const makeRequest = (body?: any, method: 'PATCH' | 'POST' = 'PATCH') =>
 
 describe('/api/notes/[id] route', () => {
   it('GET returns the note', async () => {
-    const response = await GET(emptyRequest, { params: Promise.resolve({ id: testNoteId }) })
+    const response = await GET(null as any, { params: Promise.resolve({ id: testNoteId }) })
+    
+    expect(response.status).toBe(200)
     const data = await response.json()
     
     expect(data.note.id).toBe(testNoteId)
@@ -48,9 +50,8 @@ describe('/api/notes/[id] route', () => {
     expect(data.note.title).toBe('Updated Title')
   })
 
-  it('DELETE soft deletes the note', async () => {
-    const response = await DELETE(emptyRequest, { params: Promise.resolve({ id: testNoteId }) })
-    const data = await response.json()
+  it('DELETE hard deletes the note', async () => {
+    const response = await DELETE(null as any, { params: Promise.resolve({ id: testNoteId }) })
     
     expect(data.note.id).toBe(testNoteId)
     
@@ -67,7 +68,7 @@ describe('/api/notes/[id] route', () => {
 
   it('GET returns 404 for non-existent ID', async () => {
     const fakeId = '00000000-0000-0000-0000-000000000000'
-    const response = await GET(emptyRequest, {params: Promise.resolve({id: fakeId})})
+    const response = await GET(null as any, {params: Promise.resolve({id: fakeId})})
 
     expect(response.status).toBe(404)
     const data = await response.json()
@@ -76,7 +77,7 @@ describe('/api/notes/[id] route', () => {
 
   it('GET returns 400 for invalid ID format', async () => {
         const invalidId = 'not-a-uuid'
-        const response = await GET(emptyRequest, { params: Promise.resolve({ id: invalidId }) })
+        const response = await GET(null as any, { params: Promise.resolve({ id: invalidId }) })
         
         expect(response.status).toBe(400)
         const data = await response.json()
