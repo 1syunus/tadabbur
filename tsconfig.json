@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "es2022", /* Set a modern target */
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "module": "esnext", /* Use ES Modules */
     "moduleResolution": "node", /* or "node" for compatibility */
     "allowJs": true,
@@ -10,9 +14,8 @@
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "isolatedModules": true,
-
     /* Next.js Specifics */
     "incremental": true,
     "plugins": [
@@ -21,10 +24,21 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"] /* CRITICAL for the import alias */
+      "@/*": [
+        "./*"
+      ] /* CRITICAL for the import alias */
     },
     "baseUrl": ".",
+    "resolveJsonModule": true
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"], /* Include all relevant files */
-  "exclude": ["node_modules"]
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+, "jest.server.config.cjs"  ],
+  "exclude": [
+    "node_modules"
+  ]
 }
