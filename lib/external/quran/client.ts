@@ -99,9 +99,15 @@ export class QuranClient {
     lastError = error
 
     // NON-RETRYABLE ERRORS
-    if (error instanceof QuranAPIError) // double check this if I intro a soft subclass later
+    if (
+      error instanceof QuranAPIRateLimitError ||
+      error instanceof QuranAPIValidationError ||
+      (error instanceof QuranAPIError && error.status !== undefined)
+    )
       // Bubble up immediately
-      throw error
+      {
+        throw error
+      }
 
     // RETRYABLE ERRORS (network problems, timeouts, etc.)
     if (attempt < this.retryAttempts - 1) {
