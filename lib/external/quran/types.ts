@@ -1,5 +1,164 @@
 import { z } from "zod";
 
+// =======================================================
+// INTERNAL NORMALIZED TYPES
+// =======================================================
+
+export const NormalizedAyahSchema = z.object({
+    ayahKey: z.string(),
+    surah: z.number(),
+    ayah: z.number(),
+    arabic: z.string(),
+
+    translation: z.string(),
+    translationSource: z.string(),
+    translationId: z.number(),
+
+    additionalTranslations: z
+      .array(
+        z.object({
+          id: z.number(),
+          text: z.string(),
+          source: z.string(),
+        })
+      )
+      .optional(),
+
+    juz: z.number(),
+    page: z.number(),
+})
+
+export type NormalizedAyah = z.infer<typeof NormalizedAyahSchema>
+
+export const NormalizedSearchResultSchema = z.object({
+  ayahKey: z.string(),
+  surah: z.number(),
+  ayah: z.number(),
+  text: z.string(),
+  highlightedText: z.string().optional(),
+  translationSource: z.string(),
+})
+
+export type NormalizedSearchResult = z.infer<
+  typeof NormalizedSearchResultSchema
+>
+
+export const NormalizedSearchResponseSchema = z.object({
+  query: z.string(),
+  totalResults: z.number(),
+  currentPage: z.number(),
+  totalPages: z.number(),
+  perPage: z.number(),
+  results: z.array(NormalizedSearchResultSchema),
+})
+
+export type NormalizedSearchResponse = z.infer<
+  typeof NormalizedSearchResponseSchema
+>
+
+export const NormalizedTafsirSchema = z.object({
+  ayahKey: z.string(),
+  text: z.string(),
+  source: z.string(),
+  sourceId: z.number(),
+  language: z.string(),
+})
+
+export type NormalizedTafsir = z.infer<typeof NormalizedTafsirSchema>
+
+export const NormalizedSurahSchema = z.object({
+  id: z.number(),
+  nameArabic: z.string(),
+  nameEnglish: z.string(),
+  nameSimple: z.string(),
+  ayahCount: z.number(),
+  revelationPlace: z.enum(['makkah', 'madinah']),
+  revelationOrder: z.number(),
+})
+
+export const RevelationPlaceEnum = z.enum(['makkah', 'madinah'])
+export type RevelationPlace = z.infer<typeof RevelationPlaceEnum>
+
+export type NormalizedSurah = z.infer<typeof NormalizedSurahSchema>
+
+// =======================================================
+// EXTERNAL API RAW TYPES (Direct from Quran.Foundation)
+// =======================================================
+
+export const ExternalTranslationSchema = z.object({
+  id: z.number(),
+  resource_id: z.number(),
+  text: z.string(),
+  language_name: z.string().optional(),
+  resource_name: z.string().optional(),
+})
+
+export const ExternalVerseSchema = z.object({
+  id: z.number(),
+  verse_number: z.number(),
+  verse_key: z.string(),
+  chapter_id: z.number(),
+  page_number: z.number(),
+  juz_number: z.number(),
+  hizb_number: z.number(),
+  rub_el_hizb_number: z.number(),
+  text_uthmani: z.string(),
+  translations: z.array(ExternalTranslationSchema).optional(),
+})
+
+export type ExternalVerse = z.infer<typeof ExternalVerseSchema>
+
+export const ExternalSearchResultSchema = z.object({
+  verse_id: z.number(),
+  verse_key: z.string(),
+  text: z.string(),
+  highlighted: z.string().optional(),
+  translation_id: z.number(),
+  translation_name: z.string(),
+})
+
+export const ExternalSearchResponseSchema = z.object({
+  search: z.object({
+    query: z.string(),
+    total_results: z.number(),
+    current_page: z.number(),
+    total_pages: z.number(),
+    per_page: z.number(),
+    results: z.array(ExternalSearchResultSchema),
+  }),
+})
+
+export const ExternalTafsirSchema = z.object({
+  id: z.number(),
+  tafsir_id: z.number(),
+  tafsir_name: z.string(),
+  verse_key: z.string(),
+  text: z.string(),
+  language_name: z.string().optional(),
+})
+
+export const ExternalTafsirResponseSchema = z.object({
+  tafsir: ExternalTafsirSchema,
+})
+
+export const ExternalChapterSchema = z.object({
+  id: z.number(),
+  revelation_place: z.string(), // Normalize later
+  revelation_order: z.number(),
+  name_simple: z.string(),
+  name_complex: z.string(),
+  name_arabic: z.string(),
+  verses_count: z.number(),
+  translated_name: z.object({
+    language_name: z.string(),
+    name: z.string(),
+  }),
+})
+
+// =======================================================
+// UTILITY SCHEMAS
+// =======================================================
+
 // =====================================
 // 1. Pagination metadata
 // =====================================
@@ -40,98 +199,6 @@ export const TranslatedNameSchema = z.object({
   language_name: z.string(),
   name: z.string(),
 });
-
-// =====================================
-// CORE ENTITIES
-// =====================================
-
-// 5. Translation object
-export const TranslationSchema = z.object({
-  id: z.number(),
-  resource_id: z.number(),
-  text: z.string(),
-  language_name: z.string().optional(),
-  resource_name: z.string().optional(),
-});
-export type Translation = z.infer<typeof TranslationSchema>;
-
-// 6. Verse
-export const VerseSchema = z.object({
-  id: z.number(),
-  verse_number: z.number(),
-  verse_key: z.string(),
-  chapter_id: z.number(),
-  page_number: z.number(),
-  juz_number: z.number(),
-
-  text_uthmani: z.string(),
-  text_indopak: z.string().optional(),
-
-  sajdah_number: z.number().nullable().optional(),
-  ruku_number: z.number().nullable().optional(),
-
-  translations: z.array(TranslationSchema).optional(),
-
-  audio: z.object({ url: z.string().url() }).optional(),
-});
-export type Verse = z.infer<typeof VerseSchema>;
-
-// 7. Search result item
-export const SearchResultSchema = z.object({
-  verse_id: z.number(),             // ← FIX 1
-  verse_key: z.string(),
-  text: z.string(),
-  highlighted: z.string().optional(),
-  translation_id: z.number(),
-});
-export type SearchResult = z.infer<typeof SearchResultSchema>;
-
-// 8. Tafsir
-export const TafsirSchema = z.object({
-  id: z.number(),
-  tafsir_id: z.number(),
-  tafsir_name: z.string(),
-  verse_key: z.string(),
-  text: z.string(),
-});
-export type Tafsir = z.infer<typeof TafsirSchema>;
-
-// 9. Chapter
-export const ChapterSchema = z.object({
-  id: z.number(),
-  revelation_place: z.enum(['makkah', 'madinah']), // ← FIX 2
-  revelation_order: z.number(),
-  bismillah_pre: z.boolean(),
-  name_simple: z.string(),
-  name_arabic: z.string(),
-  verses_count: z.number(),
-  pages: z.array(z.number()),
-  translated_name: TranslatedNameSchema,
-});
-export type Chapter = z.infer<typeof ChapterSchema>;
-
-// =====================================
-// RESPONSE SCHEMAS
-// =====================================
-
-// 10. Search Response
-export const SearchPayloadSchema = PaginatedListSchema(SearchResultSchema).extend({
-  query: z.string(),
-});
-export const SearchResponseSchema = BaseWrappedResponseSchema("search", SearchPayloadSchema);
-export type SearchResponse = z.infer<typeof SearchResponseSchema>;
-
-// 11. Verse Response
-export const VerseResponseSchema = BaseWrappedResponseSchema("verse", VerseSchema);
-export type VerseResponse = z.infer<typeof VerseResponseSchema>;
-
-// 12. Tafsir Response
-export const TafsirResponseSchema = BaseWrappedResponseSchema("tafsir", TafsirSchema);
-export type TafsirResponse = z.infer<typeof TafsirResponseSchema>;
-
-// 13. Chapter Response
-export const ChapterResponseSchema = BaseWrappedResponseSchema("chapter", ChapterSchema);
-export type ChapterResponse = z.infer<typeof ChapterResponseSchema>;
 
 // =====================================
 // ERROR TYPES
