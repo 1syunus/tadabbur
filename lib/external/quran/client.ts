@@ -7,7 +7,6 @@ import {
   from "./normalized"
 
 import { normalizeAyah } from "./normalizers/ayah"
-import { normalizeRevelationPlace } from "./normalizers/revelationPlace"
 import { normalizeSearchResponse } from "./normalizers/search"
 import { normalizeSurah } from "./normalizers/surah"
 import { normalizeTafsir } from "./normalizers/tafsir"
@@ -31,6 +30,12 @@ const DEFAULT_TRANSLATION_ID = 131
 const DEFAULT_TAFSIR_ID = 169
 
 export interface QuranClientConfig {
+  //== OAuth == //
+  clientId: string
+  clientSecret: string
+  authEndpoint: string
+  //===
+
   baseUrl?: string
   translationId?: number
   tafsirId?: number
@@ -40,6 +45,14 @@ export interface QuranClientConfig {
 }
 
 export class QuranClient {
+  //== OAuth states / config == //
+  private clientId: string
+  private clientSecret: string
+  private authEndpoint: string
+  private accessToken: string | null = null
+  private tokenExpiryTime: number = 0 // Unix timestamp
+  // ====
+  
   private baseUrl: string
   private translationId: number
   private tafsirId: number
@@ -47,13 +60,78 @@ export class QuranClient {
   private retryAttempts: number
   private retryDelay: number
 
-  constructor(config: QuranClientConfig = {}) {
+  constructor(config: QuranClientConfig) {
+    if (
+      !config.clientId || !config.clientSecret || !config.authEndpoint
+    ) {
+        throw new Error('QuranClient requires clientId, clientSecret, and authEndpoint.')
+        }
+    
+    this.clientId = config.clientId
+    this.clientSecret = config.clientSecret
+    this.authEndpoint = config.authEndpoint
+
     this.baseUrl = config.baseUrl ?? API_BASE
     this.translationId = config.translationId ?? DEFAULT_TRANSLATION_ID
     this.tafsirId = config.tafsirId ?? DEFAULT_TAFSIR_ID
     this.timeout = config.timeout ?? 10000
     this.retryAttempts = config.retryAttempts ?? 3
     this.retryDelay = config.retryDelay ?? 1000
+  }
+
+  /**
+   * check token first
+   */
+  private async ensureToken(): Promise<string> {
+    if (this.accessToken && Date.now() < this.tokenExpiryTime) {
+      return this.accessToken
+    }
+
+    const body = new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: this.clientId,
+      client_secret: this.clientSecret,
+    })
+
+    try {
+      const response = await fetch(this.authEndpoint, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: body,
+      })
+
+      if (!response.ok) {
+        const text = await response.text()
+        throw new QuranAPIResponseError(
+          response.status, text || response.statusText, this.authEndpoint
+        )
+      }
+      
+      const data = await response.json()
+
+      if (!data.access_token || typeof data.expires_in !== 'number') {
+          throw new QuranAPIValidationError(
+            this.authEndpoint,
+            new Error('Missing token or expiry time in OAuth response')
+          )
+      }
+      const token: string = data.access_token
+      this.accessToken = token
+
+      // expiry
+      const expiryBuffer = 5 * 60 * 1000
+      this.tokenExpiryTime = Date.now() + (data.expires_in * 1000) - expiryBuffer;
+
+      return token
+    } catch (error: unknown) {
+      if (error instanceof QuranAPIError) throw error
+      throw new QuranAPIError(
+        'Failed to obtain access token.',
+        undefined,
+        this.authEndpoint,
+        { cause: error instanceof Error ? error : new Error(String(error)) }
+      )
+    }
   }
 
   private async fetchWithRetry<T>(
@@ -65,35 +143,48 @@ export class QuranClient {
     let lastError: Error | null = null
 
     for (let attempt = 0; attempt < this.retryAttempts; attempt++) {
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), this.timeout)
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout)
 
-  try {
-    // ---- 1. NETWORK REQUEST ----
-    let response: Response
     try {
-      response = await fetch(url, {
-        ...options,
-        signal: controller.signal,
-        headers: { Accept: 'application/json', ...options.headers },
-      })
-    } catch (err: unknown) {
-      // Network failure — retry unless last attempt
-      const cause = err instanceof Error ? err : new Error(String(err))
+      // ---- 1. NETWORK REQUEST ----
+      const token = await this.ensureToken()
+      
+      let response: Response
+      try {
+        response = await fetch(url, {
+          ...options,
+          signal: controller.signal,
+          headers: {
+            Accept: 'application/json',
+            'Authorization': `Bearer ${token}`,
+            ...options.headers
+          },
+        })
+      } catch (err: unknown) {
+        // Network failure — retry unless last attempt
+        const cause = err instanceof Error ? err : new Error(String(err))
 
-      if (cause.name === 'AbortError') {
-        throw new QuranAPITimeoutError(endpoint, cause)
+        if (cause.name === 'AbortError') {
+          throw new QuranAPITimeoutError(endpoint, cause)
+        }
+
+        throw new QuranAPINetworkError(endpoint, cause)
+      } finally {
+        clearTimeout(timeoutId)
       }
-
-      throw new QuranAPINetworkError(endpoint, cause)
-    } finally {
-      clearTimeout(timeoutId)
-    }
 
     // ---- 2. NON-RETRYABLE ERRORS ----
     if (response.status === 429) {
       // Rate limit: NEVER retry
       throw new QuranAPIRateLimitError(endpoint)
+    }
+
+    if (response.status === 401) {
+      // Token expired → reset & retry once
+      this.accessToken = null;
+      if (attempt < this.retryAttempts - 1) continue;
+      throw new QuranAPIResponseError(401, "Unauthorized", endpoint)
     }
 
     if (!response.ok) {
@@ -224,5 +315,6 @@ throw lastError ?? new QuranAPIError('Unknown error', undefined, endpoint)
   }
 }
 
-// Singleton export
-export const quranClient = new QuranClient()
+export function createQuranClient(config: QuranClientConfig) {
+  return new QuranClient(config);
+}
