@@ -1,18 +1,30 @@
 import {
-  VerseSchema,
-  SearchResponseSchema,
-  TafsirResponseSchema,
-  ChapterSchema,
+  type NormalizedAyah,
+  type NormalizedSearchResponse,
+  type NormalizedTafsir,
+  type NormalizedSurah,
+}
+  from "./normalized"
+
+import { normalizeAyah } from "./normalizers/ayah"
+import { normalizeRevelationPlace } from "./normalizers/revelationPlace"
+import { normalizeSearchResponse } from "./normalizers/search"
+import { normalizeSurah } from "./normalizers/surah"
+import { normalizeTafsir } from "./normalizers/tafsir"
+
+import {
+  ExternalVerseSchema,
+  ExternalSearchResponseSchema,
+  ExternalTafsirResponseSchema,
+  ExternalChapterSchema,
   QuranAPIError,
   QuranAPINetworkError,
   QuranAPIValidationError,
   QuranAPIRateLimitError,
   QuranAPIResponseError,
-  type Verse,
-  type SearchResponse,
-  type TafsirResponse,
-  type Chapter,
-} from './types'
+  QuranAPITimeoutError,
+}
+  from './types'
 
 const API_BASE = 'https://api.quran.foundation/v1'
 const DEFAULT_TRANSLATION_ID = 131
@@ -68,6 +80,11 @@ export class QuranClient {
     } catch (err: unknown) {
       // Network failure — retry unless last attempt
       const cause = err instanceof Error ? err : new Error(String(err))
+
+      if (cause.name === 'AbortError') {
+        throw new QuranAPITimeoutError(endpoint, cause)
+      }
+
       throw new QuranAPINetworkError(endpoint, cause)
     } finally {
       clearTimeout(timeoutId)
@@ -130,59 +147,78 @@ throw lastError ?? new QuranAPIError('Unknown error', undefined, endpoint)
     ids: number[],
     endpointFn: (id: number) => string,
     schema: { parse: (data: unknown) => T },
-    key: string
+    dataKey: string
   ): Promise<T[]> {
-    return Promise.all(ids.map((id) => this.fetchByKey(endpointFn(id), key, schema)))
+    return Promise.all(ids.map((id) => this.fetchByKey(endpointFn(id), dataKey, schema)))
   }
 
   private async fetchByKey<T>(
     endpoint: string,
-    key: string,
+    dataKey: string,
     schema: { parse: (data: unknown) => T }
   ): Promise<T> {
-    return this.fetchWithRetry(endpoint, {}, (data) => schema.parse((data as Record<string, unknown>)[key]))
+    return this.fetchWithRetry(endpoint, {}, (data) => schema.parse((data as Record<string, unknown>)[dataKey]))
   }
 
   // --- Public API Methods ---
 
-  async searchVerses(query: string, page = 1, size = 20): Promise<SearchResponse> {
+  async searchAyat(query: string, page = 1, size = 20): Promise<NormalizedSearchResponse> {
     const params = new URLSearchParams({
       q: query,
       page: page.toString(),
       size: Math.min(size, 50).toString(),
       translation: this.translationId.toString(),
     })
-    return this.fetchWithRetry(`/search?${params}`, {}, (data) =>
-      SearchResponseSchema.parse(data)
+    const external = await this.fetchWithRetry(
+      `/search?${params}`,
+      {},
+      (data) => ExternalSearchResponseSchema.parse(data)
     )
+    return normalizeSearchResponse(external)
   }
 
-  async getVerse(verseKey: string, translationIds?: number[]): Promise<Verse> {
+  async getAyah(verseKey: string, translationIds?: number[]): Promise<NormalizedAyah> {
     const translations = translationIds ?? [this.translationId]
     const params = new URLSearchParams({ translations: translations.join(',') })
-    return this.fetchWithRetry(`/verses/by_key/${verseKey}?${params}`, {}, (data) =>
-      VerseSchema.parse((data as any).verse)
+
+    const external = await this.fetchWithRetry(
+      `/verses/by_key/${verseKey}?${params}`,
+      {},
+      (data) => ExternalVerseSchema.parse((data as any).verse)
     )
+
+    return normalizeAyah(external)
   }
 
-  async getTafsir(verseKey: string, tafsirIds?: number[]): Promise<TafsirResponse[]> {
+  async getTafsir(verseKey: string, tafsirIds?: number[]): Promise<NormalizedTafsir[]> {
     const ids = tafsirIds ?? [this.tafsirId]
-    return this.fetchMultiple(ids, (id) => `/tafsirs/${id}/by_ayah/${verseKey}`, TafsirResponseSchema, 'tafsir')
+    const external = await this.fetchMultiple(
+      ids, (id) => 
+        `/tafsirs/${id}/by_ayah/${verseKey}`,
+      ExternalTafsirResponseSchema,
+      'tafsir'
+    )
+    return external.map(normalizeTafsir)
   }
 
-  async getChapter(chapterId: number): Promise<Chapter> {
+  async getSurah(chapterId: number): Promise<NormalizedSurah> {
     if (chapterId < 1 || chapterId > 114)
-      throw new QuranAPIValidationError(undefined, new Error('Invalid chapter ID (must be 1-114)'))
-    return this.fetchByKey(`/chapters/${chapterId}`, 'chapter', ChapterSchema)
+      throw new QuranAPIValidationError()
+    const external = await this.fetchByKey(
+      `/chapters/${chapterId}`,
+      'chapter',
+      ExternalChapterSchema
+    )
+    return normalizeSurah(external)
   }
 
-  async getVerseRange(startKey: string, endKey: string): Promise<Verse[]> {
+  async getAyahRange(startKey: string, endKey: string): Promise<NormalizedAyah[]> {
     const [startSurah, startAyah] = startKey.split(':').map(Number)
     const [endSurah, endAyah] = endKey.split(':').map(Number)
-    if (startSurah !== endSurah) throw new QuranAPIValidationError(undefined, new Error('Range must be within same surah'))
-    const promises: Promise<Verse>[] = []
+    if (startSurah !== endSurah) throw new QuranAPIValidationError()
+    const promises: Promise<NormalizedAyah>[] = []
     for (let ayah = startAyah; ayah <= endAyah; ayah++) {
-      promises.push(this.getVerse(`${startSurah}:${ayah}`))
+      promises.push(this.getAyah(`${startSurah}:${ayah}`))
     }
     return Promise.all(promises)
   }

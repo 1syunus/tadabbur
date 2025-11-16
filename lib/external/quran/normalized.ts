@@ -66,17 +66,17 @@ export const NormalizedTafsirSchema = z.object({
 
 export type NormalizedTafsir = z.infer<typeof NormalizedTafsirSchema>
 
+export const RevelationPlaceEnum = z.enum(['makkah', 'madinah', 'unknown'])
+export type RevelationPlace = z.infer<typeof RevelationPlaceEnum>
+
 export const NormalizedSurahSchema = z.object({
   id: z.number(),
   nameArabic: z.string(),
   nameEnglish: z.string(),
   nameSimple: z.string(),
   ayahCount: z.number(),
-  revelationPlace: z.enum(['makkah', 'madinah']),
+  revelationPlace: RevelationPlaceEnum,
   revelationOrder: z.number(),
 })
-
-export const RevelationPlaceEnum = z.enum(['makkah', 'madinah'])
-export type RevelationPlace = z.infer<typeof RevelationPlaceEnum>
 
 export type NormalizedSurah = z.infer<typeof NormalizedSurahSchema>
