@@ -4,11 +4,20 @@ import { z } from "zod"
 // INTERNAL NORMALIZED TYPES
 // =======================================================
 
+export const NormalizedTranslationSchema = z.object({
+  //TODO: Expand translation options after n users
+})
+
 export const NormalizedAyahSchema = z.object({
+    ayah: z.number(),
+    ayahNumber: z.number(),
     ayahKey: z.string(),
     surah: z.number(),
-    ayah: z.number(),
-    arabic: z.string(),
+
+    arabic: z.string(), //maps to text_uthmani
+    
+    hizb: z.number(),
+    rubElHizb: z.number(),
 
     translation: z.string(),
     translationSource: z.string(),
@@ -31,9 +40,10 @@ export const NormalizedAyahSchema = z.object({
 export type NormalizedAyah = z.infer<typeof NormalizedAyahSchema>
 
 export const NormalizedSearchResultSchema = z.object({
+  ayah: z.number(),
+  ayahNumber: z.number(),
   ayahKey: z.string(),
   surah: z.number(),
-  ayah: z.number(),
   text: z.string(),
   highlightedText: z.string().optional(),
   translationSource: z.string(),
@@ -57,10 +67,11 @@ export type NormalizedSearchResponse = z.infer<
 >
 
 export const NormalizedTafsirSchema = z.object({
+  tafsirEntryId: z.number(),
   ayahKey: z.string(),
   text: z.string(),
-  source: z.string(),
-  sourceId: z.number(),
+  sourceName: z.string(),
+  source: z.number(),
   language: z.string(),
 })
 
@@ -70,7 +81,7 @@ export const RevelationPlaceEnum = z.enum(['makkah', 'madinah', 'unknown'])
 export type RevelationPlace = z.infer<typeof RevelationPlaceEnum>
 
 export const NormalizedSurahSchema = z.object({
-  id: z.number(),
+  surah: z.number(),
   nameArabic: z.string(),
   nameEnglish: z.string(),
   nameSimple: z.string(),
