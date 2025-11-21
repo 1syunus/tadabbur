@@ -7,8 +7,18 @@ export function normalizeAyah(raw: z.infer<typeof ExternalVerseSchema>): Normali
     if (!raw.verse_key) throw new QuranAPIError('Missing verse_key in API response')
     
     const [surah, ayahNumber] = raw.verse_key.split(':').map(Number)
-    const translations = raw.translations ?? []
-    const primaryTranslation = translations[0]
+    
+    const translations = (raw.translations ?? []).map(t => ({
+      translation: t.id ?? 0,
+      translationName: t.resource_name ?? 'Unknown',
+      translationText: t.text ?? "",
+    }))
+
+    const primaryTranslation = translations[0] ?? {
+      translation: 0,
+      translationName: "Unknown",
+      translationText: "",
+    }
 
     return {
       ayah: raw.id,
@@ -16,15 +26,14 @@ export function normalizeAyah(raw: z.infer<typeof ExternalVerseSchema>): Normali
       ayahNumber,
       surah,
 
-      arabic: raw.text_uthmani || '',
-      translation: primaryTranslation?.text || '',
-      translationSource: primaryTranslation?.resource_name ?? 'Unknown',
-      translationId: primaryTranslation?.id ?? 0,
-      additionalTranslations: raw.translations?.slice(1).map((t) => ({
-        text: t.text ?? '',
-        source: t.resource_name ?? 'Unknown',
-        id: t.id ?? 0,
-      })),
+      arabic: raw.text_uthmani ?? '',
+
+      translation: primaryTranslation.translation,
+      translationName: primaryTranslation.translationName,
+      translationText: primaryTranslation?.translationText,
+
+      translations,
+      additionalTranslations: translations.slice(1),
             
       hizb: raw.hizb_number ?? 0,
       rubElHizb: raw.rub_el_hizb_number ?? 0,

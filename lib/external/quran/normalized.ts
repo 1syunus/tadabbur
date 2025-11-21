@@ -5,7 +5,9 @@ import { z } from "zod"
 // =======================================================
 
 export const NormalizedTranslationSchema = z.object({
-  //TODO: Expand translation options after n users
+  translation: z.number(), // numeric id
+  translationName: z.string(), // human id
+  translationText: z.string(), // actual text
 })
 
 export const NormalizedAyahSchema = z.object({
@@ -14,24 +16,19 @@ export const NormalizedAyahSchema = z.object({
     ayahKey: z.string(),
     surah: z.number(),
 
-    arabic: z.string(), //maps to text_uthmani
     
+    arabic: z.string(), //maps to text_uthmani
     hizb: z.number(),
     rubElHizb: z.number(),
 
-    translation: z.string(),
-    translationSource: z.string(),
-    translationId: z.number(),
+    // primary translation
+    translation: z.number(),
+    translationName: z.string(),
+    translationText: z.string(),
 
-    additionalTranslations: z
-      .array(
-        z.object({
-          id: z.number(),
-          text: z.string(),
-          source: z.string(),
-        })
-      )
-      .optional(),
+    // lists
+    translations: NormalizedTranslationSchema.array(),
+    additionalTranslations: NormalizedTranslationSchema.array(),
 
     juz: z.number(),
     page: z.number(),
