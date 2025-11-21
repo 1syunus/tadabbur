@@ -5,7 +5,7 @@ import { normalizeRevelationPlace } from "./revelationPlace"
 
 export function normalizeSurah(raw: z.infer<typeof ExternalChapterSchema>): NormalizedSurah {
     return {
-      id: raw.id ?? 0,
+      surah: raw.id ?? 0,
       nameArabic: raw.name_arabic || '',
       nameEnglish: raw.translated_name?.name || '',
       nameSimple: raw.name_simple || '',
