@@ -14,7 +14,7 @@ import { normalizeTafsir } from "./normalizers/tafsir"
 import {
   ExternalVerseSchema,
   ExternalSearchResponseSchema,
-  ExternalTafsirResponseSchema,
+  ExternalTafsirSchema,
   ExternalChapterSchema,
   QuranAPIError,
   QuranAPINetworkError,
@@ -152,9 +152,13 @@ export class QuranClient {
       
       let response: Response
       try {
+        const signal = options.signal
+          ? (AbortSignal as any).any([options.signal, controller.signal])
+          : controller.signal
+
         response = await fetch(url, {
           ...options,
-          signal: controller.signal,
+          signal,
           headers: {
             Accept: 'application/json',
             'Authorization': `Bearer ${token}`,
@@ -165,10 +169,15 @@ export class QuranClient {
         // Network failure — retry unless last attempt
         const cause = err instanceof Error ? err : new Error(String(err))
 
-        if (cause.name === 'AbortError') {
-          throw new QuranAPITimeoutError(endpoint, cause)
-        }
+        const isAbort =
+          cause.name === 'AbortError' || 
+          cause.message.includes('aborted') ||
+          (cause as any).code === 'ABORT_ERR'
 
+        if (isAbort) {
+          throw new QuranAPITimeoutError(endpoint, cause)
+          
+        }
         throw new QuranAPINetworkError(endpoint, cause)
       } finally {
         clearTimeout(timeoutId)
@@ -199,18 +208,24 @@ export class QuranClient {
       return validator(data)
     } catch (err: unknown) {
       // Invalid API payload — do NOT retry
-      const cause = err instanceof Error ? err : new Error(String(err))
-      throw new QuranAPIValidationError(endpoint, cause)
+      throw new QuranAPIValidationError(endpoint, err as Error)
     }
   } catch (err: unknown) {
     const error = err as Error
     lastError = error
 
+    // RETRYABLES
+    const isRetryable = 
+      error instanceof QuranAPINetworkError || 
+      error instanceof QuranAPITimeoutError
+
     // NON-RETRYABLE ERRORS
-    if (
-      error instanceof QuranAPIRateLimitError ||
-      error instanceof QuranAPIValidationError ||
-      (error instanceof QuranAPIError && error.status !== undefined)
+    if ( !isRetryable && 
+      (
+        error instanceof QuranAPIRateLimitError ||
+        error instanceof QuranAPIValidationError ||
+        (error instanceof QuranAPIError && error.status !== undefined)
+      )
     )
       // Bubble up immediately
       {
@@ -286,15 +301,15 @@ throw lastError ?? new QuranAPIError('Unknown error', undefined, endpoint)
     const external = await this.fetchMultiple(
       ids, (id) => 
         `/tafsirs/${id}/by_ayah/${verseKey}`,
-      ExternalTafsirResponseSchema,
+      ExternalTafsirSchema,
       'tafsir'
     )
     return external.map(normalizeTafsir)
   }
 
   async getSurah(chapterId: number): Promise<NormalizedSurah> {
-    if (chapterId < 1 || chapterId > 114)
-      throw new QuranAPIValidationError()
+    if (chapterId < 1 || chapterId > 114) throw new QuranAPIValidationError()
+    
     const external = await this.fetchByKey(
       `/chapters/${chapterId}`,
       'chapter',
@@ -306,8 +321,10 @@ throw lastError ?? new QuranAPIError('Unknown error', undefined, endpoint)
   async getAyahRange(startKey: string, endKey: string): Promise<NormalizedAyah[]> {
     const [startSurah, startAyah] = startKey.split(':').map(Number)
     const [endSurah, endAyah] = endKey.split(':').map(Number)
+
     if (startSurah !== endSurah) throw new QuranAPIValidationError()
     const promises: Promise<NormalizedAyah>[] = []
+  
     for (let ayah = startAyah; ayah <= endAyah; ayah++) {
       promises.push(this.getAyah(`${startSurah}:${ayah}`))
     }
