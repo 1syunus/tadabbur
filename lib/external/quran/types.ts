@@ -168,3 +168,13 @@ export class QuranAPIResponseError extends QuranAPIError {
     super(`API returned ${status}: ${statusText}`, status, endpoint)
   }
 }
+
+//** Service Errors */
+export class QuranServiceError extends Error {
+  public code: 'RATE_LIMIT' | 'TIMEOUT' | 'VALIDATION' | 'UNKNOWN'
+  constructor(message: string, code: QuranServiceError['code']) {
+    super(message)
+    this.code = code
+    this.name = 'QuranServiceError'
+  }
+}
