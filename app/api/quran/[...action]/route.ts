@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { quranService } from '@/lib/services/quran/QuranService'
+import { quranService } from '@/lib/external/quran'
 import { QuranServiceError } from '@/lib/external/quran/types'
 import { requireAuth } from '@/lib/api/auth'
 import { handleApiError, BadRequestError, ApiError } from '@/lib/api/errors'
@@ -27,8 +27,8 @@ const ChapterIdSchema = z.coerce
 
 const SearchParamsSchema = z.object({
   q: z.string().min(1, 'Query cannot be empty').max(200),
-  page: z.coerce.number().int().positive().default(1),
-  size: z.coerce.number().int().positive().max(50).default(20),
+  page: z.coerce.number().int().positive().optional().default(1),
+  size: z.coerce.number().int().positive().max(50).optional().default(20),
 })
 
 const RangeParamsSchema = z.object({
@@ -76,8 +76,8 @@ export async function GET(
     if (action === 'search') {
       const validated = SearchParamsSchema.safeParse({
         q: searchParams.get('q'),
-        page: searchParams.get('page'),
-        size: searchParams.get('size'),
+        page: searchParams.get('page') ?? undefined,
+        size: searchParams.get('size') ?? undefined,
       })
 
       if (!validated.success) {
