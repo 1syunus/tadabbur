@@ -339,10 +339,10 @@ export function createQuranService(
   config?: Partial<QuranServiceConfig>,
 ): QuranService {
   const defaultConfig: QuranServiceConfig = {
-    clientId: process.env.QURAN_CLIENT_ID!,
-    clientSecret: process.env.QURAN_CLIENT_SECRET!,
+    clientId: process.env.QURAN_API_CLIENT_ID!,
+    clientSecret: process.env.QURAN_API_CLIENT_SECRET!,
     authEndpoint:
-      process.env.QURAN_AUTH_ENDPOINT ??
+      process.env.QURAN_API_AUTH_ENDPOINT ??
       'https://api.quran.foundation/oauth/token',
     enableCache: process.env.NODE_ENV !== 'test', // Disable in tests
     cacheTTL: 3600000, // 1 hour
