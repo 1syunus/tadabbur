@@ -82,7 +82,7 @@
 
 ---
 
-## Phase 4: Backend Service Layer & Testing Infrastructure - 2025-11-07 to 2025-11-08
+## Phase 3: Backend Service Layer & Testing Infrastructure - 2025-11-07 to 2025-11-08
 
 ### Completed Tasks
 
@@ -138,6 +138,65 @@ Sections:
 1. Implement Quran Foundation API client (external integration)
 2. Implement Gemini AI client (LLM integration)
 3. Begin frontend UI development
+
+---
+
+## Phase 4: External API Integration - 2025-11-17
+
+### Completed Tasks
+- [x] Implemented `QuranClient` class for interacting with Quran Foundation API
+- [x] Added **token-based authentication** with `client_credentials` grant
+- [x] Implemented **automatic token refresh** on 401 responses
+- [x] Added **fetch retry/backoff logic** for network errors and timeouts
+- [x] Centralized **error handling** with custom error classes:
+  - `QuranAPIError`, `QuranAPIValidationError`, `QuranAPINetworkError`, `QuranAPITimeoutError`, `QuranAPIRateLimitError`, `QuranAPIResponseError`
+- [x] Public API methods implemented:
+  - `searchAyat`
+  - `getAyah`
+  - `getTafsir`
+  - `getSurah`
+  - `getAyahRange`
+- [x] Switched from singleton export to **factory function `createQuranClient(config)`** for DI-friendly instantiation
+- [x] Ensured **type safety and validation** for all API responses using `validator` callbacks
+- [x] Added **helper methods**: `fetchMultiple` and `fetchByKey` for reusable patterns
+
+### Next Steps
+1. Write unit tests for all `QuranClient` methods
+2. Integrate client into application services
+3. Add caching layer for frequently accessed API endpoints
+4. Document API client usage and update README
+5. Phase 4: Frontend Integration & UI consumption of Quran data
+
+---
+
+## Phase 5: Quran API Integration, Environment Fixes & Route Testing Stability — 2025-11-22 to 2025-11-23
+
+### Completed Tasks
+
+**External API Integration:**
+- [x] Completed Quran Foundation external service integration
+- [x] Finalized `QuranService` factory with correct `QURAN_API_*` environment variables
+- [x] Updated default config to use `QURAN_API_CLIENT_ID`, `QURAN_API_CLIENT_SECRET`, and `QURAN_API_AUTH_ENDPOINT`
+- [x] Ensured safe initialization paths so service can run in dev, prod, and test environments
+- [x] Improved upstream error mapping (rate limits, timeouts, validation, unknown errors)
+
+**Route Handler Stabilization:**
+- [x] Updated `/api/quran/[...action]` to correctly normalize `URLSearchParams` (`null` → `undefined`)
+- [x] Ensured Zod defaults trigger properly for missing optional inputs
+- [x] Fixed status code mappings (400/429/502/504/500)
+- [x] Hardened error-handling flows using shared `ApiError` utilities
+
+**Testing Infrastructure Fixes:**
+- [x] Added hoisted Jest mocks to prevent eager singleton initialization before test setup
+- [x] Injected dummy `QURAN_API_*` env vars in the test suite to prevent OAuth failures
+- [x] Isolated test behavior by fully mocking the service layer
+- [x] Completed integration suite for all Quran routes (search, ayah, tafsir, surah, range)
+- [x] Resolved async handle issues causing tests to hang post-run
+
+**Bug Fixes:**
+- [x] Corrected env variable names (`QURAN_CLIENT_ID` → `QURAN_API_CLIENT_ID`)
+- [x] Corrected auth endpoint fallback logic
+- [x] Removed redundant `.env` loading in Jest, avoiding conflicting sources
 
 ---
 
@@ -268,6 +327,7 @@ Sections:
   - Structural entities (sections) are organizational, not content
   - Soft delete enables "trash can" UX for user content
 - **Tradeoff**: Database rows remain (storage cost), but negligible at MVP scale
+
 
 
 ---
@@ -405,6 +465,98 @@ Sections:
   - `jest.config.js` (dual project setup)
   - `jest.server.config.cjs` (server-specific config)
   - `package.json` (test scripts with cross-env)
+
+---
+
+### Challenge 7: OAuth Token Management & Retry Logic
+- **Date**: 2025-11-17
+- **Problem**: Need secure, retryable API client for external Quran API with short-lived access tokens
+- **Impact**: Without automatic refresh and retry, requests would fail intermittently, breaking application features
+- **Attempted Solutions**:
+  1. Single request without retry — failed on network glitches or expired tokens
+  2. Global singleton client with static token — insecure and not DI-friendly
+- **Final Solution**:
+  - Created `QuranClient` class with `fetchWithRetry`
+  - Auto-refresh access token via `ensureToken()`
+  - Retry logic with exponential backoff
+  - Centralized error handling with custom error classes
+  - Factory function `createQuranClient(config)` instead of singleton export
+- **Code Changes**: `services/quranClient.ts`
+- **Learning**: Centralizing token logic + retry makes API consumption safe, testable, and maintainable; factory functions improve security and DI patterns
+
+---
+
+### Challenge 8: Unit Testing Async API Client
+- **Date**: 2025-11-21
+- **Problem**: Creating a robust unit test suite for `QuranClient` was blocked by three compounding issues:
+    1.  **Deadlocks**: Jest's Fake Timers clashed with the client's `setTimeout` retry logic, causing tests to hang indefinitely.
+    2.  **Race Conditions**: Parallel requests (via `Promise.all`) triggered simultaneous authentication fetches, causing mock queue misalignment and crashes.
+    3.  **Schema Mismatches**: A structural disconnect between the Client (which unwrapped responses) and the Zod Schemas (which expected wrapped responses) caused silent validation errors.
+- **Impact**: Unable to verify critical network resilience features (retries, timeouts) and data integrity, leaving the application vulnerable to production crashes.
+- **Attempted Solutions**: 
+  1.  **Standard Mocks**: Failed due to queue misalignment in parallel tests.
+  2.  **Manual Try/Catch**: Failed because unhandled promise rejections bubbled up before the catch block could execute during timer advancement.
+  3.  **Double-Wrapping Mocks**: A temporary workaround that hid the underlying schema/client mismatch.
+- **Final Solution**: 
+  - **Token Bypass**: Manually injected access tokens `(client as any).accessToken` to bypass authentication race conditions during parallel tests.
+  - **Async Error Capture**: Used `.catch(e => e)` *before* advancing timers to safely inspect retry/timeout errors without unhandled rejections.
+  - **Schema Alignment**: Refactored `getTafsir` to use Inner Schemas, aligning the code with the data structure and allowing correct Single-Wrap mocks.
+  - **Mock Implementation**: Used `mockImplementation((url) => ...)` for parallel tests to route requests by URL rather than queue order.
+- **Code Changes**: `lib/external/quran/client.unit.test.ts` (New file), `lib/external/quran/client.ts` (Schema fixes), `lib/external/quran/normalizers` (Type updates).
+- **Learning**: Testing asynchronous network logic with fake timers requires strict control over the event loop. When testing parallel data fetching, authentication logic should be isolated to avoid race conditions that don't exist in the serial flow.
+
+---
+
+### Challenge 9: Integration Testing Next.js API Routes
+- **Date**: 2025-11-21
+- **Problem**: Testing the `/api/quran` route handler was failing due to two distinct issues:
+    1.  **Singleton Instantiation**: The route imports a global `quranService` singleton that tries to initialize immediately. In the test environment, missing environment variables caused the test suite to crash before running tests.
+    2.  **Validation Mismatches**: The Zod schema in the route was stricter than the test inputs (e.g., `searchParams.get()` returning `null` caused Zod to fail numeric validation instead of applying default values).
+- **Impact**: Unable to verify that the API layer correctly translates Service errors into HTTP status codes or validates user input, risking unhandled exceptions in production.
+- **Attempted Solutions**: 
+  1.  **Standard Mocking**: `jest.mock` failed to catch the singleton initialization because the import happened before the mock was hoisted/applied.
+  2.  **Partial Test Inputs**: Tests omitted optional parameters like `page`, but the route validation crashed on `null` values instead of using defaults.
+- **Final Solution**: 
+  1.  **Mock Factory Pattern**: Used `jest.mock(path, () => ({ quranService: ... }))` to hoist the mock creation *before* imports, preventing the real singleton from ever initializing.
+  2.  **Null Coalescing**: Updated the route handler to explicitly convert `searchParams.get() ?? undefined` so Zod defaults trigger correctly.
+  3.  **Dummy Env Vars**: Injected dummy environment variables at the top of the test file as a safety net.
+- **Code Changes**: `app/api/quran/[...action]/route.ts` (Null handling), `app/api/quran/[...action]/route.test.ts` (New suite).
+- **Learning**: Next.js App Router tests running in `node` environment require careful handling of singletons. `URLSearchParams` returns `null` (not `undefined`), which bypasses Zod's `.default()` logic unless explicitly handled.
+
+---
+
+### Challenge 10: Quran Route Tests Failing Due to Premature Singleton Instantiation
+- **Date**: 2025-11-23
+- **Problem**: Importing the route loaded a global `quranService` instance before mocks/envs were applied.
+- **Impact**: Test suite crashed before the first assertion.
+- **Attempted Solutions**:
+  1. Standard Jest mocks (too late to intercept)
+  2. Env injection in config (didn't stop early instantiation)
+- **Final Solution**: Hoisted Jest mock with full stubbed service + controlled test-safe factory instantiation.
+- **Learning**: App Router imports execute eagerly; singletons must be mock-safe at module load time.
+
+---
+
+### Challenge 11: Zod Validation Failing Due to `URLSearchParams.get()` Returning `null`
+- **Problem**: Zod `.default()` doesn’t apply when values are `null`.
+- **Impact**: Missing params returned 400 instead of applying defaults.
+- **Final Solution**: Normalized to `searchParams.get() ?? undefined`.
+
+---
+
+### Challenge 12: Wrong Environment Variable Names Breaking OAuth Flow
+- **Problem**: Service referenced `QURAN_CLIENT_ID` while `.env.test` used `QURAN_API_CLIENT_ID`.
+- **Impact**: OAuth token exchange failed → 502 responses.
+- **Final Solution**: Updated service to exclusively use `QURAN_API_*` names.
+
+---
+
+### Challenge 13: Async Handles Preventing Jest from Exiting
+- **Problem**: Real service attempted token acquisition, producing async open handles even after tests ended.  
+- **Impact**: Jest hung with `did not exit one second after the test run completed`.  
+- **Final Solution**: Full service mocking + no real async flows executed during tests.  
+- **Learning**: Ensure external services cannot trigger async activity in integration tests unless intentionally E2E.
+
 ---
 
 ### Template for Future Entries:
