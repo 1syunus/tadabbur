@@ -19,9 +19,11 @@ export function toGeminiMessage(
 export function fromGeminiMessage(
   geminiMessage: GeminiMessage,
 ): NormalizedMessage {
+    const textPart = geminiMessage.parts.find(p => typeof p.text === 'string' && p.text.trim() !== '')?.text ??
+    ''
   return {
-    role: geminiMessage.role === 'model' ? 'assistant' : (geminiMessage.role as 'user' | 'system'),
-    content: geminiMessage.parts[0].text,
+    role: geminiMessage.role === 'model' ? 'assistant' : geminiMessage.role,
+    content: textPart,
     timestamp: new Date(),
   }
 }

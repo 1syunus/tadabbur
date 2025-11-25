@@ -57,9 +57,15 @@ export class GeminiClient {
       content: SYSTEM_PROMPT,
     }
 
+    const cleanHistory = conversationHistory.filter(msg => {
+        const isSystem = msg.role === 'system'
+        const isEmpty = !msg.content || msg.content.trim().length === 0
+        return !isSystem && !isEmpty
+    })
+
     const messages: GeminiMessage[] = [
       toGeminiMessage(systemMessage),
-      ...conversationHistory.map(toGeminiMessage),
+      ...cleanHistory.map(toGeminiMessage),
     ]
 
     const url = `${API_BASE}/${this.model}:generateContent?key=${this.apiKey}`
@@ -98,7 +104,8 @@ export class GeminiClient {
           const errorText = await response.text()
           throw new GeminiAPIError(
             `Gemini API error: ${response.status} - ${errorText}`,
-            response.status,
+            Number(response.status),
+            new Error(errorText)
           )
         }
 
@@ -116,7 +123,11 @@ export class GeminiClient {
         // Extract response message
         const candidate = validated.candidates[0]
         if (!candidate) {
-          throw new GeminiAPIError('No response generated')
+          throw new GeminiValidationError('No response generated')
+        }
+
+        if (candidate.finishReason && candidate.finishReason !== 'STOP') {
+            throw new GeminiAPIError(`Gemini blocked response: ${candidate.finishReason}`)
         }
 
         const geminiMessage: GeminiMessage = {
@@ -126,14 +137,25 @@ export class GeminiClient {
 
         return fromGeminiMessage(geminiMessage)
       } catch (error) {
+
+        if (error instanceof DOMException && error.name === 'AbortError') {
+            throw new GeminiAPIError('Request aborted (timeout)', 408)
+        }
+
         lastError = error as Error
 
         // Don't retry rate limits or validation errors
         if (
           error instanceof GeminiRateLimitError ||
-          error instanceof GeminiValidationError
+          error instanceof GeminiValidationError ||
+          (error instanceof GeminiAPIError && error.message.includes('blocked'))
         ) {
           throw error
+        }
+
+        // Don't retry on 4xx errors
+        if (error instanceof GeminiAPIError && error.status && error.status >= 400 && error.status < 500) {
+             throw error
         }
 
         // Exponential backoff for retries

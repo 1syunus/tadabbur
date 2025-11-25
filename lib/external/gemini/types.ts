@@ -17,7 +17,7 @@ export const GeminiMessageSchema = z.object({
   role: GeminiRoleSchema,
   parts: z.array(
     z.object({
-      text: z.string(),
+      text: z.string().optional(),
     }),
   ),
 })
@@ -32,7 +32,7 @@ export const GeminiResponseSchema = z.object({
       content: z.object({
         parts: z.array(
           z.object({
-            text: z.string(),
+            text: z.string().optional(),
           }),
         ),
         role: z.string(),
