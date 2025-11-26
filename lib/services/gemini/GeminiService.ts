@@ -1,6 +1,7 @@
 import type { GeminiClient } from '@/lib/external/gemini/client'
 import type { ConversationRepo } from '@/lib/db/ConversationRepo'
 import type { NormalizedMessage } from '@/lib/external/gemini/normalized'
+import { extractAyahReferences, extractTafsirNames } from '@/lib/external/gemini/utils/extractors'
 import {
   GeminiServiceError,
   GeminiRateLimitError,
@@ -68,7 +69,11 @@ export class GeminiService {
       // 4. Generate AI response (client enforces system prompt)
       const aiResponse = await this.client.generateResponse(context)
 
-      // 5. Save AI response
+      // 5. Exract metadata from AI response
+      aiResponse.ayahReferences = extractAyahReferences(aiResponse.content)
+      aiResponse.tafsirUsed = extractTafsirNames(aiResponse.content)
+      
+      // 6. Save messages
       await this.repo.saveMessage(conversationId, aiResponse)
 
       return aiResponse
@@ -81,7 +86,8 @@ export class GeminiService {
    * Map client errors to service errors
    */
   private handleError(error: unknown): never {
-    if (error instanceof GeminiRateLimitError) {
+    const e = error as Error
+    if (e instanceof GeminiRateLimitError || e.name === 'GeminiRateLimitError') {
       throw new GeminiServiceError('Rate limit exceeded', 'RATE_LIMIT')
     }
 
