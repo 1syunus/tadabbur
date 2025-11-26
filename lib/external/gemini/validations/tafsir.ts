@@ -8,4 +8,4 @@ export const TafsirUsedSchema = z.object({
 })
 
 // Schema for the array coming from DB (JSONB can be null)
-export const TafsirUsedArraySchema = z.array(TafsirUsedSchema).default([])
+export const TafsirUsedArraySchema = z.array(z.string()).default([])

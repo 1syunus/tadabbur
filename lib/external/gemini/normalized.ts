@@ -5,11 +5,7 @@ export interface NormalizedMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
   ayahReferences?: string[] // ["2:255", "3:159"]
-  tafsirUsed?: Array<{
-    ayahKey: string
-    tafsirId: number
-    sourceName: string
-  }>
+  tafsirUsed?: string[]
   timestamp?: Date
 }
 
