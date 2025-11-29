@@ -1,11 +1,12 @@
 /**
- * Quran Foundation API Constants
+ * App-wide Constants
  * 
- * Centralized configuration for Quran API integration including:
- * - API endpoints and versioning
- * - Default translation and tafsir sources
- * - Pagination limits
- * - Supported languages and resources
+ ** Centralized configuration for external APIs (e.g., Quran.foundation API),
+ * application limits, default resources, and global constants
+ ** Includes configuration for:
+ * - External APIs (e.g., QURAN_API, GEMINI)
+ * - Default resources and service settings
+ * - Pagination, Caching, and Validation rules
  * 
  * @module config/constants
  */
@@ -197,6 +198,11 @@ export const ERROR_MESSAGES = {
   MISSING_VERSE_KEY: 'Missing required parameter: verse_key',
   MISSING_CHAPTER_ID: 'Missing required parameter: chapter_id',
   MISSING_QUERY: 'Missing required parameter: q (query)',
+
+  GEMINI_RATE_LIMIT: 'Gemini API rate limit exceeded. Please wait a few moments and try again.',
+  GEMINI_VALIDATION: 'The AI request failed due to invalid input parameters or context.',
+  GEMINI_UNKNOWN: 'An unexpected error occurred during AI generation.',
+  
   RATE_LIMIT: 'Rate limit exceeded. Please try again later.',
   TIMEOUT: 'Request timed out. Please try again.',
   NETWORK_ERROR: 'Network error occurred. Please check your connection.',
@@ -232,3 +238,19 @@ export const SUPPORTED_LANGUAGES = {
 export type TranslationId = typeof TRANSLATIONS[keyof typeof TRANSLATIONS]
 export type TafsirId = typeof TAFSIRS[keyof typeof TAFSIRS]
 export type LanguageCode = typeof SUPPORTED_LANGUAGES[keyof typeof SUPPORTED_LANGUAGES]
+
+// ==========================================
+// GEMINI AI SERVICE CONFIGURATION
+// ==========================================
+export const GEMINI = {
+  // Memory window for the conversation (number of previous messages to send)
+  MEMORY_WINDOW: 10,
+
+  // Default generation parameters (cost/quality balance)
+  GENERATION_CONFIG: {
+    temperature: 0.7,
+    topK: 40,
+    topP: 0.95,
+    maxOutputTokens: 2048,
+  },
+} as const;
