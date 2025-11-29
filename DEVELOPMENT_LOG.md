@@ -164,8 +164,7 @@ Sections:
 1. Write unit tests for all `QuranClient` methods
 2. Integrate client into application services
 3. Add caching layer for frequently accessed API endpoints
-4. Document API client usage and update README
-5. Phase 4: Frontend Integration & UI consumption of Quran data
+4. Document API client usage and update READMEa
 
 ---
 
@@ -197,6 +196,31 @@ Sections:
 - [x] Corrected env variable names (`QURAN_CLIENT_ID` → `QURAN_API_CLIENT_ID`)
 - [x] Corrected auth endpoint fallback logic
 - [x] Removed redundant `.env` loading in Jest, avoiding conflicting sources
+
+---
+
+# Phase 6: Gemini AI Integration — Client, Service, Extractors, and Route Layer
+
+**2025-11-24 → 2025-11-25**
+
+**Summary:**
+Completed full end-to-end Gemini AI integration, including the client layer, service layer, metadata extractors, and the `/api/ai/chat` route. Implemented comprehensive unit tests for each layer, stabilized async behavior, resolved Zod validation issues, corrected error-translation, and aligned metadata extraction with service expectations. Significant structural bugs (double-save, missing cleanup logic, incomplete mocks) were eliminated. The system now supports reliable AI message generation with ayah and tafsir metadata extraction, robust error handling, and authenticated conversation ownership checks.
+
+---
+
+## Completed Tasks
+
+* [x] Implemented **GeminiClient** with request sanitization, message preprocessing, timeout/abort handling, retry logic, and Zod-validated response parsing.
+* [x] Added **system prompt deduplication** and content sanitization to avoid duplicate or empty messages.
+* [x] Fixed async behavior in client tests using the stable **Capture → Advance → Await** pattern.
+* [x] Updated all Gemini client mocks to fully satisfy the Zod schema shape (candidates, parts, safety ratings, finishReason, etc.).
+* [x] Implemented **GeminiService**, including user message creation, AI orchestration, metadata extraction, error translation, and repository interactions.
+* [x] Removed the **double-save bug** in GeminiService (user message was being saved twice).
+* [x] Added **extractAyahReferences** and **extractTafsirNames** utilities with corrected regex coverage (bracketed, spelled-out, and plain formats).
+* [x] Fully stabilized **GeminiService.test.ts**, including metadata extraction, error translation, operation order, and success path.
+* [x] Rewrote `/api/ai/chat` **route tests**, including authentication, ownership validation, request schema validation, proper mock layering, and service-level error surface mapping.
+* [x] Ensured all Gemini errors are wrapped at the service layer and mapped correctly at the route layer (400, 401, 429, 500).
+* [x] Added fixtures for valid, invalid, and cross-user conversation records used to validate ownership checks in the route layer.
 
 ---
 
@@ -328,7 +352,68 @@ Sections:
   - Soft delete enables "trash can" UX for user content
 - **Tradeoff**: Database rows remain (storage cost), but negligible at MVP scale
 
+### **Decision 14: System Prompt Deduplication in GeminiClient**
 
+**Decision:** GeminiClient now removes existing system messages from conversation history before injecting the canonical system prompt.  
+**Rationale:**
+
+* Prevents duplicated system prompts inserted by tests or legacy messages.
+* Produces consistent input to Gemini’s model regardless of message order.
+* Eliminates nondeterministic test failures caused by unbounded system messages.  
+  **Tradeoff:** Slight performance overhead due to filtering history, but negligible.
+
+### **Decision 15: Content Sanitization in Message Assembly**
+
+**Decision:** Client now strips empty or whitespace-only messages before conversion to GeminiMessage.  
+**Rationale:**
+
+* Prevents empty context messages from polluting AI context.
+* Ensures tests (“filter out empty content”, “ignore whitespace-only messages”) behave consistently.  
+  **Tradeoff:** Some intentionally blank user messages would be dropped—acceptable for V1.
+
+### **Decision 16: Expanded Zod Schema Coverage in Test Mocks**
+
+**Decision:** All Gemini mocks must fully satisfy the model response schema, including safety ratings, finishReason, and text parts.  
+**Rationale:**
+
+* Ensures unit tests validate realistic response shapes.
+* Prevents false positives caused by under-mocked data structures.  
+  **Tradeoff:** Test setup is more verbose.
+
+### **Decision 17: Metadata Extraction Delegated to Utility Layer**
+
+**Decision:** GeminiService enriches AI responses by calling standalone extractor utilities rather than embedding regex logic in the service.  
+**Rationale:**
+
+* Separation of concerns (service = orchestration, utils = parsing).
+* Enables isolated testing of extractors.
+* Allows future improvements (e.g., semantic extraction) without modifying service.  
+  **Tradeoff:** Slightly more indirection but major improvement in maintainability.
+
+### **Decision 18: Consistent Error Translation at Service Layer**
+
+**Decision:** All Gemini-related errors are normalized into GeminiServiceError with codes:
+
+* VALIDATION
+* RATE_LIMIT
+* TIMEOUT
+* UNKNOWN
+
+**Rationale:**
+
+* Prevents raw Gemini errors from leaking into route handlers.
+* Ensures UI receives predictable error types.  
+  **Tradeoff:** Requires tests to assert on wrapped errors, not raw ones.
+
+
+### **Decision 19: Route-Level Stability via Fully Isolated Mocks**
+
+**Decision:** `/api/ai/chat` tests use isolated mocks for Supabase, auth, and GeminiService to ensure deterministic route responses.  
+**Rationale:**
+
+* Avoids cross-layer failures.
+* Enables strict testing of input validation, RLS checks, and status mapping.  
+  **Tradeoff:** Some mocks are verbose; worth it for stability.
 
 ---
 
@@ -559,6 +644,87 @@ Sections:
 
 ---
 
+## Challenges & Solutions
+
+### **Challenge 14: Zod Validation Failures in GeminiClient Tests**
+
+**Date:** 2025-11-24  
+**Problem:** Tests were failing due to missing fields in mocked Gemini responses (e.g., safety ratings, finishReason, content parts).  
+**Impact:** Client tests reported “Invalid API response” even for success cases.  
+**Attempted Solutions:**
+
+1. Loosen Zod schema (rejected—integrity risk).  
+2. Patch client to allow partial responses (risked silent failures).
+
+**Final Solution:**
+
+* Updated mocks to match the Zod schema exactly.
+* Stabilized valid/invalid payload tests.  
+
+**Learning:** Schema-based clients require full, realistic mock structures.
+
+---
+
+### **Challenge 15: Timeout & Retry Race Conditions in Jest**
+
+**Date:** 2025-11-24  
+**Problem:** Timeout tests hung because fetch mocks and `setTimeout` interacted unpredictably with Jest fake timers.  
+**Impact:** Tests appeared to stall or return incorrect error types.  
+**Final Solution:**
+
+* Adopted the stable pattern: **capture promise → advance timers → await result**.
+* Ensured retry loop fully drains during tests.  
+
+**Learning:** Complex async loops must be carefully orchestrated with fake timers.
+
+---
+
+### **Challenge 16: Incorrect Metadata Extraction for “4:1” Format**
+
+**Date:** 2025-11-25  
+**Problem:** Extractor returned “4” instead of “4:1” for the “Surah 4, verse 1” pattern.  
+**Impact:** Service returned incomplete ayah references; tests failed.  
+**Final Solution:**
+
+* Updated spelled-out pattern to always combine surah + ayah into `${x}:${y}`.
+* Added plain-text 2:255 detection with range validation.  
+
+**Learning:** Regex ordering and capture precedence matter.
+
+---
+
+### **Challenge 17: Double-Save Bug in GeminiService**
+
+**Date:** 2025-11-25  
+**Problem:** User messages were being saved twice—once before AI generation and again during final save.  
+**Impact:**
+
+* Incorrect call counts in tests.
+* Duplicate messages in conversation history.
+
+**Final Solution:**
+
+* Removed the second save.
+* Validated operation order tests.
+
+**Learning:** Message orchestration must preserve immutability principles.
+
+---
+
+### **Challenge 18: Rate Limit Error Not Detected in Tests**
+
+**Date:** 2025-11-25  
+**Problem:** `instanceof GeminiRateLimitError` failed in Jest due to prototype mismatches in mock instances.  
+**Impact:** Errors were mapped as UNKNOWN instead of RATE_LIMIT.  
+**Final Solution:**
+
+* Added `e.name === 'GeminiRateLimitError'` fallback.
+* Ensured GeminiServiceError maps RATE_LIMIT correctly.  
+
+**Learning:** Always provide a `.name` fallback for custom error handling.
+
+---
+
 ### Template for Future Entries:
 
 #### Challenge X: [Title]
@@ -596,29 +762,6 @@ Sections:
 
 ---
 
-## Time Tracking
-
-| Task | Estimated | Actual | Notes |
-|------|-----------|--------|-------|
-| Project setup | 2h | 1.5 | Repo, docs, infrastructure |
-| Framework Init | 1h	| 2.5h | Infrastructure setup, fixing scaffold errors (see  challenges) |
-| ERD Design | 1h | 2h | Initial design + iteration on relationships |
-| Feature Specs | 1h | 1.5h | Documenting requirements and AI constraints |
-| Database Schema | 2h | 3h | Writing migration + security hardening |
-| RLS Security Review | 0.5h | 1h | Identifying and fixing join table vulnerabilities |
-| **Service Layer** | **8h** | **12h** | 4 services, all CRUD operations |
-| **Testing Infrastructure** | **4h** | **16h** | Dual configs, test DB, auth debugging |
-| **Unit Tests** | **6h** | **8h** | 40+ service tests |
-| **Integration Tests** | **8h** | **20h** | 50+ route tests + auth debugging |
-| API integration | 4h | TBD | Quran Foundation API client |
-| Semantic search | 6h | TBD | AI keyword extraction + caching |
-| Reflection CRUD | 4h | TBD | User data management |
-| Auth integration | 2h | TBD | Supabase Auth setup |
-| Rate limiting | 3h | TBD | Redis + sliding window algorithm |
-| UI development | 8h | TBD | Components, styling, responsiveness |
-
----
-
 ## Screenshots & Demos
 
 [Add as features are completed]
@@ -638,7 +781,7 @@ Sections:
 | Metric | Target | Actual | Date |
 |--------|--------|--------|------|
 | TypeScript strict mode | 100% | TBD | - |
-| Test coverage | >80% | TBD | - |
+| Test coverage | >80% | ~94–97% | 2025-11-25 |
 | Lighthouse score | >90 | TBD | - |
 | Bundle size (FCP) | <250KB | TBD | - |
 | Lines of code | - | TBD | - |
@@ -647,16 +790,14 @@ Sections:
 | Indexes | 20 | 2025-11-07 |
 | Foreign Key Relationships | 11 | 2025-11-07 |
 | Security Issues Found | 2 (fixed) | 2025-11-07 |
-| Database Tables | 9 | 2025-11-0x|
-| RLS Policies | 32 | 2025-11-x |
-| API Endpoints | 12 | 2025-11-x |
-| Service Methods | 35 | 2025-11-x |
-| Unit Tests | 40+ | 2025-11-x |
-| Integration Tests | 50+ | 2025-11-0 |
-| **Total Tests** | **80** | 2025-11-14 |
-| **Test Pass Rate** | **100%** | 2025-11-14 |
-| Test Coverage (Services) | 95%+ | 2025-11-14 |
-| Test Coverage (Routes) | 100% | 2025-11-14 |
+| API Endpoints | 12 | 2025-11-25 |
+| Service Methods | 35 | 2025-11-25 |
+| Unit Tests | 40+ | 55+ | 2025-11-25 |
+| Integration Tests | 50+ | ~60 | 2025-11-25 |
+| **Total Tests** | **80** | **115+** | 2025-11-25 |
+| **Test Pass Rate** | **100%** | **100%** | 2025-11-25 |
+| Test Coverage (Services) | 95%+ | 98%+ | 2025-11-25 |
+| Test Coverage (Routes) | 100% | 100% | 2025-11-25 |
 
 ---
 
