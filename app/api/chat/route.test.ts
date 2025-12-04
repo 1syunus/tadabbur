@@ -1,65 +1,84 @@
-import { GET, POST } from '@/app/api/chat/route' // Importing Route Handlers
+import { GET, POST } from '@/app/api/chat/route'
 import { resetDatabase, getTestUserClient, seedTestUserData } from '@/lib/helpers/db'
 import { NextRequest } from 'next/server'
 
-// Use the correct unwrapped type for the client
-let client: Awaited<ReturnType<typeof getTestUserClient>> 
-const chatApiUrl = 'http://localhost/api/chat'
+let client: Awaited<ReturnType<typeof getTestUserClient>>
 
 beforeAll(async () => {
-    await resetDatabase()
-    client = await getTestUserClient()
-    await seedTestUserData()
-    
-    // 1. Seed two conversations for the test user
-    await client.from('conversations').insert([
-        { user_id: process.env.TEST_USER_ID!, title: 'AI Chat 1' },
-        { user_id: process.env.TEST_USER_ID!, title: 'AI Chat 2' },
-    ])
-    // 2. Seed a conversation for a different user (RLS verification)
-    await client.from('conversations').insert({ 
-        user_id: '11111111-1111-1111-1111-111111111111', 
-        title: 'Foreign Conversation', 
-    })
+  await resetDatabase()
+  client = await getTestUserClient()
+  await seedTestUserData()
+
+  // seed some conversations
+  await client.from('conversations').insert([
+    { user_id: process.env.TEST_USER_ID!, title: 'A' },
+    { user_id: process.env.TEST_USER_ID!, title: 'B' }
+  ])
+
+  // foreign user
+  await client.from('conversations').insert({
+    user_id: '11111111-1111-1111-1111-111111111111',
+    title: 'Foreign'
+  })
 }, 20000)
 
 afterAll(async () => {
-    await resetDatabase()
+  await resetDatabase()
 })
 
-describe('/api/chat route (List and Create)', () => {
+const expectNormalizedConversation = (c: any) => {
+  expect(c).toHaveProperty('id')
+  expect(c).toHaveProperty('title')
+  expect(c).toHaveProperty('isArchived')
+  expect(c).toHaveProperty('createdAt')
+  expect(c).toHaveProperty('updatedAt')
 
-    it('POST should create a new conversation and return 201', async () => {
-        const newConversationData = { title: 'New Conversation via API' }
-        
-        const request = new NextRequest(chatApiUrl, {
-            method: 'POST',
-            body: JSON.stringify(newConversationData),
-        })
+  expect(c).not.toHaveProperty('user_id')
+  expect(c).not.toHaveProperty('archived')
+  expect(c).not.toHaveProperty('created_at')
+  expect(c).not.toHaveProperty('updated_at')
+}
 
-        // Call POST handler
-        const response = await POST(request) 
-        const data = await response.json()
-
-        expect(response.status).toBe(201) // Verify 201 Created
-        expect(data.conversation).toHaveProperty('id')
-        expect(data.conversation.title).toBe(newConversationData.title)
-        // RLS Check: The created conversation belongs to the test user
-        expect(data.conversation.user_id).toBe(process.env.TEST_USER_ID) 
+describe('/api/chat route', () => {
+  it('POST creates a normalized conversation', async () => {
+    const request = new NextRequest('http://localhost/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'New Conversation' }),
     })
 
-    it('GET should retrieve all conversations for the authenticated user (RLS check)', async () => {
-        // We seeded 2 conversations for the user + 1 created above = 3
-        
-        // Call GET handler (using the 0-argument signature that works in your environment)
-        const response = await GET() 
-        const data = await response.json()
+    const response = await POST(request)
+    const data = await response.json()
 
-        expect(response.status).toBe(200)
-        expect(data.conversations.length).toBeGreaterThanOrEqual(3) 
-        
-        // RLS Check: Verify we didn't accidentally get the "Foreign Conversation"
-        const conversationTitles = data.conversations.map((c: any) => c.title)
-        expect(conversationTitles).not.toContain('Foreign Conversation') 
+    expect(response.status).toBe(201)
+    expectNormalizedConversation(data.conversation)
+    expect(data.conversation.title).toBe('New Conversation')
+  })
+
+  it('POST returns 400 when validation fails', async () => {
+    const request = new NextRequest('http://localhost/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ title: 123 }), // invalid
     })
+
+    const response = await POST(request)
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(body.error).toBe('Validation failed')
+  })
+
+  it('GET returns only normalized conversations for this user', async () => {
+    const response = await GET()
+    const data = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(Array.isArray(data.conversations)).toBe(true)
+
+    for (const c of data.conversations) {
+      expectNormalizedConversation(c)
+    }
+
+    const titles = data.conversations.map((c: any) => c.title)
+    expect(titles).not.toContain('Foreign')
+  })
 })

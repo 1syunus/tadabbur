@@ -3,6 +3,7 @@ import { NotesService } from '@/lib/api/notes/service'
 import { UpdateNoteSchema, NoteIdSchema } from '@/lib/validation/note'
 import { BadRequestError, handleApiError, NotFoundError } from '@/lib/api/errors'
 import { requireAuth } from '@/lib/api/auth'
+import { normalizeNotePage } from '@/lib/api/notes/normalized'
 
 type RouteContext = {
   params: Promise<{ id: string }>
@@ -13,26 +14,26 @@ type RouteContext = {
  */
 export async function GET(_: NextRequest, context: RouteContext) {
   try {
-    const {supabase} = await requireAuth()
-
-    const {id} = await context.params
-
-    // Validate ID param
-  const validationResult = NoteIdSchema.safeParse({ id })
-     if (!validationResult.success) { 
-       throw new BadRequestError('Invalid note ID')
-     }
-
+    const { supabase } = await requireAuth()
+    const { id } = await context.params
+    
+    const validationResult = NoteIdSchema.safeParse({ id })
+    if (!validationResult.success) {
+      throw new BadRequestError('Invalid note ID')
+    }
+    
     const notesService = new NotesService(supabase)
-    const note = await notesService.getNoteById(id)
-
-    if (!note) {
+    const rawNote = await notesService.getNoteById(id)
+    
+    if (!rawNote) {
       throw new NotFoundError('Note not found')
     }
-
+    
+    const note = normalizeNotePage(rawNote)
+    
     return NextResponse.json({ note })
   } catch (error) {
-    return handleApiError(error, '[GET /api/notes/[id]] Error:')
+    return handleApiError(error, '[GET /api/notes/[id]]')
   }
 }
 
@@ -41,31 +42,28 @@ export async function GET(_: NextRequest, context: RouteContext) {
  */
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
-    const {supabase} = await requireAuth()
-
-    const {id} = await context.params
+    const { supabase } = await requireAuth()
+    const { id } = await context.params
     const body = await request.json()
     
-    const idValidation = NoteIdSchema.safeParse({id})
+    const idValidation = NoteIdSchema.safeParse({ id })
     if (!idValidation.success) {
       throw new BadRequestError('Invalid note ID')
     }
-
     
     const bodyValidation = UpdateNoteSchema.safeParse(body)
     if (!bodyValidation.success) {
       throw new BadRequestError('Validation failed')
     }
-
+    
     const notesService = new NotesService(supabase)
-    const note = await notesService.updateNote(
-      id,
-      bodyValidation.data
-    )
-
+    const rawNote = await notesService.updateNote(id, bodyValidation.data)
+    
+    const note = normalizeNotePage(rawNote)
+    
     return NextResponse.json({ note })
   } catch (error) {
-    return handleApiError(error, '[PATCH /api/notes/[id]] Error:')
+    return handleApiError(error, '[PATCH /api/notes/[id]]')
   }
 }
 
@@ -74,20 +72,19 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
-    const {supabase} = await requireAuth()
-
-    const {id} = await context.params
-
-    const validationResult = NoteIdSchema.safeParse({id})
+    const { supabase } = await requireAuth()
+    const { id } = await context.params
+    
+    const validationResult = NoteIdSchema.safeParse({ id })
     if (!validationResult.success) {
       throw new BadRequestError('Invalid note ID')
     }
-
+    
     const notesService = new NotesService(supabase)
-    const note = await notesService.permanentlyDeleteNote(id)
-
-    return NextResponse.json({ note })
+    await notesService.permanentlyDeleteNote(id)
+    
+    return NextResponse.json({ success: true })
   } catch (error) {
-    return handleApiError(error, '[DELETE /api/notes/[id]] Error:')
+    return handleApiError(error, '[DELETE /api/notes/[id]]')
   }
 }
