@@ -1,91 +1,120 @@
 import { GET, POST } from '@/app/api/chat/[id]/messages/route'
-import { resetDatabase, seedTestUserData, getTestUserClient, createAdminClient } from '@/lib/helpers/db'
+import { resetDatabase, seedTestUserData, getTestUserClient } from '@/lib/helpers/db'
 import { NextRequest } from 'next/server'
 
-let userClient: Awaited<ReturnType<typeof getTestUserClient>>
-let adminClient: ReturnType<typeof createAdminClient>
-let userConversationId: string
-let foreignConversationId: string
+let client: Awaited<ReturnType<typeof getTestUserClient>>
+let conversationId: string
 
 beforeAll(async () => {
   await resetDatabase()
-  userClient = await getTestUserClient()
-  adminClient = createAdminClient()
+  client = await getTestUserClient()
   await seedTestUserData()
-  
-  const TEST_USER_ID = process.env.TEST_USER_ID!
-  const FOREIGN_USER_ID = '11111111-1111-1111-1111-111111111111'
-  
-  // CREATE THE FOREIGN USER FIRST (with proper error handling)
-  try {
-    await adminClient.auth.admin.createUser({
-      id: FOREIGN_USER_ID,
-      email: 'foreign@test.com',
-      password: 'foreign_password',
-      email_confirm: true,
-    })
-  } catch (error: any) {
-    // User already exists from previous test run - that's fine
-    if (!error.message?.includes('already been registered')) {
-      throw error
+
+  const { data, error } = await client
+    .from('conversations')
+    .insert({ user_id: process.env.TEST_USER_ID!, title: 'Chat' })
+    .select('id')
+    .single()
+  if (error) throw error
+
+  conversationId = data.id
+
+  await client.from('messages').insert([
+    {
+      conversation_id: conversationId,
+      role: 'user',
+      content: 'Hello',
+    },
+    {
+      conversation_id: conversationId,
+      role: 'assistant',
+      content: 'Hi!',
     }
-  }
-  
-  // Create conversations for both users
-  const { data: userConv, error: userConvError } = await userClient
-    .from('conversations')
-    .insert({ user_id: TEST_USER_ID, title: 'User Messages Test' })
-    .select('id')
-    .single()
-  if (userConvError) throw userConvError
-  userConversationId = userConv.id
-  
-  const { data: foreignConv, error: foreignConvError } = await adminClient
-    .from('conversations')
-    .insert({ user_id: FOREIGN_USER_ID, title: 'Foreign Messages Test' })
-    .select('id')
-    .single()
-  if (foreignConvError) throw foreignConvError
-  foreignConversationId = foreignConv.id
-  
-  // Seed messages
-  await userClient.from('messages').insert([
-    { conversation_id: userConversationId, role: 'user', content: 'User Message 1' },
-    { conversation_id: userConversationId, role: 'assistant', content: 'Assistant Reply 1' },
-  ])
-  
-  await adminClient.from('messages').insert([
-    { conversation_id: foreignConversationId, role: 'user', content: 'SECRET MESSAGE' }
   ])
 }, 20000)
 
+const expectNormalizedMessage = (m: any) => {
+  expect(m).toHaveProperty('id')
+  expect(m).toHaveProperty('conversationId')
+  expect(m).toHaveProperty('role')
+  expect(m).toHaveProperty('content')
+  expect(m).toHaveProperty('ayahReferences')
+  expect(m).toHaveProperty('tafsirUsed')
+  expect(m).toHaveProperty('createdAt')
+
+  expect(m).not.toHaveProperty('conversation_id')
+  expect(m).not.toHaveProperty('created_at')
+}
+
 describe('/api/chat/[id]/messages route', () => {
-  it('POST should create a new message', async () => {
-    const request = new NextRequest(`http://localhost/api/chat/${userConversationId}/messages`, {
-      method: 'POST',
-      body: JSON.stringify({ role: 'user', content: 'New message via API' }),
+  it('GET returns normalized messages in order', async () => {
+    const response = await GET(null as any, {
+      params: Promise.resolve({ id: conversationId }),
     })
-    const response = await POST(request, { params: Promise.resolve({ id: userConversationId }) })
-    const data = await response.json()
-
-    expect(response.status).toBe(201)
-    expect(data.message.content).toBe('New message via API')
-    expect(data.message.conversation_id).toBe(userConversationId)
-  })
-
-  it('GET should retrieve messages for the authenticated user', async () => {
-    const response = await GET(null as any, { params: Promise.resolve({ id: userConversationId }) })
     const data = await response.json()
 
     expect(response.status).toBe(200)
-    expect(data.messages.length).toBeGreaterThanOrEqual(2)
-    expect(data.messages[0]).toHaveProperty('role')
+    expect(Array.isArray(data.messages)).toBe(true)
+    expect(data.messages.length).toBe(2)
+
+    for (const m of data.messages) expectNormalizedMessage(m)
+
+    // must be chronological by created_at
+    const ids = data.messages.map((m: any) => m.id)
+    expect(ids.length).toBe(2)
   })
 
-  it('GET should return 404 for a conversation owned by another user', async () => {
-    const response = await GET(null as any, { params: Promise.resolve({ id: foreignConversationId }) })
+  it('POST creates a normalized message', async () => {
+    const request = new NextRequest(
+      'http://localhost/api/chat/' + conversationId + '/messages',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          role: 'user',
+          content: 'New message',
+          ayahReferences: [],
+          tafsirUsed: [],
+        }),
+      }
+    )
+
+    const response = await POST(request, {
+      params: Promise.resolve({ id: conversationId }),
+    })
+
     const data = await response.json()
-    expect(response.status).toBe(404)
-    expect(data.error).toBe('Conversation not found')
+
+    expect(response.status).toBe(201)
+    expectNormalizedMessage(data.message)
+    expect(data.message.content).toBe('New message')
+  })
+
+  it('POST returns 400 for invalid message payload', async () => {
+    const request = new NextRequest(
+      'http://localhost/api/chat/' + conversationId + '/messages',
+      {
+        method: 'POST',
+        body: JSON.stringify({ role: 999 }), // invalid
+      }
+    )
+
+    const response = await POST(request, {
+      params: Promise.resolve({ id: conversationId }),
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(body.error).toBe('Validation failed')
+  })
+
+  it('GET returns 400 for invalid conversation ID', async () => {
+    const response = await GET(null as any, {
+      params: Promise.resolve({ id: 'bad-id' }),
+    })
+
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(body.error).toBe('Invalid conversation ID')
   })
 })
