@@ -3,6 +3,7 @@ import { NotesService } from '@/lib/api/notes/service'
 import { CreateNoteSchema } from '@/lib/validation/note'
 import { BadRequestError, handleApiError } from '@/lib/api/errors'
 import { requireAuth } from '@/lib/api/auth'
+import { normalizeNotePages, normalizeNotePage } from '@/lib/api/notes/normalized'
 
 /**
  * GET /api/notes
@@ -10,14 +11,15 @@ import { requireAuth } from '@/lib/api/auth'
  */
 export async function GET() {
   try {
-    const {supabase} = await requireAuth()
-
+    const { supabase } = await requireAuth()
     const notesService = new NotesService(supabase)
-    const notes = await notesService.getAllNotes()
-
+    const rawNotes = await notesService.getAllNotes()
+    
+    const notes = normalizeNotePages(rawNotes)
+    
     return NextResponse.json({ notes })
   } catch (error) {
-    return handleApiError(error, '[GET /api/notes] Error:')
+    return handleApiError(error, '[GET /api/notes]')
   }
 }
 
@@ -27,23 +29,24 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const {supabase, user} = await requireAuth()
+    const { supabase, user } = await requireAuth()
     const body = await request.json()
     
-    // Validate with Zod
     const validation = CreateNoteSchema.safeParse(body)
     if (!validation.success) {
       throw new BadRequestError('Validation failed')
     }
-
+    
     const notesService = new NotesService(supabase)
-    const note = await notesService.createNote({
-      user_id: user.id, // Set from auth, not from body
+    const rawNote = await notesService.createNote({
+      user_id: user.id,
       ...validation.data,
     })
-
+    
+    const note = normalizeNotePage(rawNote)
+    
     return NextResponse.json({ note }, { status: 201 })
   } catch (error) {
-    return handleApiError(error, '[POST /api/notes] Error:')
+    return handleApiError(error, '[POST /api/notes]')
   }
 }
