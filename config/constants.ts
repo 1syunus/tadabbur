@@ -1,10 +1,12 @@
 /**
  * App-wide Constants
  * 
- ** Centralized configuration for external APIs (e.g., Quran.foundation API),
- * application limits, default resources, and global constants
- ** Includes configuration for:
- * - External APIs (e.g., QURAN_API, GEMINI)
+ * Centralized configuration for external APIs, application limits,
+ * default resources, and global constants
+ * 
+ * Includes configuration for:
+ * - External APIs (Quran Foundation, Gemini AI)
+ * - Internal services (Notes, Sections, Conversations)
  * - Default resources and service settings
  * - Pagination, Caching, and Validation rules
  * 
@@ -12,7 +14,7 @@
  */
 
 // =======================================================
-// API CONFIGURATION
+// EXTERNAL API CONFIGURATION
 // =======================================================
 
 export const QURAN_API = {
@@ -35,13 +37,34 @@ export const QURAN_API = {
   RETRY_DELAY: 1000,
 } as const
 
+export const GEMINI = {
+  /** Memory window for conversation (number of previous messages to send) */
+  MEMORY_WINDOW: 10,
+
+  /** Default generation parameters (cost/quality balance) */
+  GENERATION_CONFIG: {
+    temperature: 0.7,
+    topK: 40,
+    topP: 0.95,
+    maxOutputTokens: 2048,
+  },
+  
+  /** Request timeout in milliseconds */
+  TIMEOUT: 30000,
+  
+  /** Number of retry attempts for failed requests */
+  RETRY_ATTEMPTS: 3,
+  
+  /** Initial retry delay in milliseconds */
+  RETRY_DELAY: 1000,
+} as const
+
 // =======================================================
 // DEFAULT RESOURCES
 // =======================================================
 
 /**
  * Default translation IDs
- * 
  * Common English translations of the Quran
  */
 export const TRANSLATIONS = {
@@ -69,7 +92,6 @@ export const TRANSLATIONS = {
 
 /**
  * Default tafsir (commentary) IDs
- * 
  * Common English tafsir sources
  */
 export const TAFSIRS = {
@@ -102,6 +124,30 @@ export const PAGINATION = {
   
   /** Default starting page (1-indexed) */
   DEFAULT_PAGE: 1,
+} as const
+
+// =======================================================
+// INTERNAL ENTITY LIMITS
+// =======================================================
+
+export const ENTITY_LIMITS = {
+  /** Maximum note title length */
+  NOTE_TITLE_MAX_LENGTH: 255,
+  
+  /** Maximum note content length */
+  NOTE_CONTENT_MAX_LENGTH: 100000,
+  
+  /** Maximum section name length */
+  SECTION_NAME_MAX_LENGTH: 100,
+  
+  /** Maximum conversation title length */
+  CONVERSATION_TITLE_MAX_LENGTH: 255,
+  
+  /** Maximum message content length */
+  MESSAGE_CONTENT_MAX_LENGTH: 10000,
+  
+  /** Minimum message content length */
+  MESSAGE_CONTENT_MIN_LENGTH: 1,
 } as const
 
 // =======================================================
@@ -178,6 +224,12 @@ export const VALIDATION = {
   /** Regex for verse key format (e.g., "2:255") */
   VERSE_KEY_PATTERN: /^\d{1,3}:\d{1,3}$/,
   
+  /** Regex for ayah reference format (same as verse key) */
+  AYAH_REFERENCE_PATTERN: /^\d+:\d+$/,
+  
+  /** Regex for hex color code format */
+  HEX_COLOR_PATTERN: /^#[0-9A-Fa-f]{6}$/,
+  
   /** Maximum search query length */
   MAX_SEARCH_QUERY_LENGTH: 200,
   
@@ -190,6 +242,7 @@ export const VALIDATION = {
 // =======================================================
 
 export const ERROR_MESSAGES = {
+  // Quran API errors
   INVALID_VERSE_KEY: 'Invalid verse key format (expected "surah:ayah")',
   INVALID_CHAPTER_ID: 'Chapter ID must be between 1 and 114',
   INVALID_PAGE_SIZE: `Page size must be between ${PAGINATION.MIN_PAGE_SIZE} and ${PAGINATION.MAX_PAGE_SIZE}`,
@@ -199,15 +252,28 @@ export const ERROR_MESSAGES = {
   MISSING_CHAPTER_ID: 'Missing required parameter: chapter_id',
   MISSING_QUERY: 'Missing required parameter: q (query)',
 
+  // Gemini AI errors
   GEMINI_RATE_LIMIT: 'Gemini API rate limit exceeded. Please wait a few moments and try again.',
   GEMINI_VALIDATION: 'The AI request failed due to invalid input parameters or context.',
   GEMINI_UNKNOWN: 'An unexpected error occurred during AI generation.',
   
+  // Internal entity errors
+  INVALID_NOTE_ID: 'Invalid note ID',
+  INVALID_SECTION_ID: 'Invalid section ID',
+  INVALID_CONVERSATION_ID: 'Invalid conversation ID',
+  NOTE_NOT_FOUND: 'Note not found',
+  SECTION_NOT_FOUND: 'Section not found',
+  CONVERSATION_NOT_FOUND: 'Conversation not found',
+  MESSAGE_NOT_FOUND: 'Message not found',
+  
+  // Generic errors
   RATE_LIMIT: 'Rate limit exceeded. Please try again later.',
   TIMEOUT: 'Request timed out. Please try again.',
   NETWORK_ERROR: 'Network error occurred. Please check your connection.',
   VALIDATION_ERROR: 'Invalid data received from API',
   UNKNOWN_ERROR: 'An unexpected error occurred',
+  UNAUTHORIZED: 'Authentication required',
+  FORBIDDEN: 'You do not have permission to access this resource',
 } as const
 
 // =======================================================
@@ -232,25 +298,43 @@ export const SUPPORTED_LANGUAGES = {
 } as const
 
 // =======================================================
+// MESSAGE ROLES
+// =======================================================
+
+export const MESSAGE_ROLES = {
+  USER: 'user',
+  ASSISTANT: 'assistant',
+  SYSTEM: 'system',
+} as const
+
+export type MessageRole = typeof MESSAGE_ROLES[keyof typeof MESSAGE_ROLES]
+
+// =======================================================
+// HTTP STATUS CODES (for reference)
+// =======================================================
+
+export const HTTP_STATUS = {
+  OK: 200,
+  CREATED: 201,
+  NO_CONTENT: 204,
+  BAD_REQUEST: 400,
+  UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
+  NOT_FOUND: 404,
+  CONFLICT: 409,
+  UNPROCESSABLE_ENTITY: 422,
+  TOO_MANY_REQUESTS: 429,
+  INTERNAL_SERVER_ERROR: 500,
+  BAD_GATEWAY: 502,
+  SERVICE_UNAVAILABLE: 503,
+  GATEWAY_TIMEOUT: 504,
+} as const
+
+// =======================================================
 // TYPE EXPORTS
 // =======================================================
 
 export type TranslationId = typeof TRANSLATIONS[keyof typeof TRANSLATIONS]
 export type TafsirId = typeof TAFSIRS[keyof typeof TAFSIRS]
 export type LanguageCode = typeof SUPPORTED_LANGUAGES[keyof typeof SUPPORTED_LANGUAGES]
-
-// ==========================================
-// GEMINI AI SERVICE CONFIGURATION
-// ==========================================
-export const GEMINI = {
-  // Memory window for the conversation (number of previous messages to send)
-  MEMORY_WINDOW: 10,
-
-  // Default generation parameters (cost/quality balance)
-  GENERATION_CONFIG: {
-    temperature: 0.7,
-    topK: 40,
-    topP: 0.95,
-    maxOutputTokens: 2048,
-  },
-} as const;
+export type HttpStatusCode = typeof HTTP_STATUS[keyof typeof HTTP_STATUS]

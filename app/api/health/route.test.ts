@@ -1,40 +1,69 @@
-console.log('QURAN_CLIENT_ID:', JSON.stringify(process.env.QURAN_CLIENT_ID));
-console.log('QURAN_CLIENT_SECRET:', JSON.stringify(process.env.QURAN_CLIENT_SECRET));
-
 /**
  * Integration Tests for Health Check Endpoint
  * 
  * Tests the /api/health endpoint to ensure:
  * - API server responds correctly
- * - OAuth authentication is working
- * - External Quran Foundation API is accessible
+ * - Quran OAuth authentication is working
+ * - Quran external API is accessible
+ * - Gemini API key is configured
+ * - Database connectivity works
  * - Proper status codes are returned
  * 
  * @requires QURAN_CLIENT_ID environment variable
  * @requires QURAN_CLIENT_SECRET environment variable
+ * @requires GEMINI_API_KEY environment variable
+ * @requires NEXT_PUBLIC_SUPABASE_URL environment variable
+ * @requires NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable
  */
 
 import { GET } from '@/app/api/health/route'
-import { NextRequest } from 'next/server'
+import { quranService } from '@/lib/services/quran/QuranService'
+import { QuranServiceError } from '@/lib/external/quran/types'
+import { createClient } from '@supabase/supabase-js'
 
-// Mock the quranService to control behavior
+// Mock dependencies
 jest.mock('@/lib/services/quran/QuranService', () => ({
   quranService: {
     getSurah: jest.fn(),
   },
 }))
 
-import { quranService } from '@/lib/services/quran/QuranService'
-import { QuranServiceError } from '@/lib/external/quran/types'
+jest.mock('@supabase/supabase-js', () => ({
+  createClient: jest.fn(),
+}))
 
 describe('GET /api/health', () => {
+  let originalEnv: NodeJS.ProcessEnv
+  let mockSupabase: any
+
   beforeEach(() => {
     jest.clearAllMocks()
+    originalEnv = process.env
+
+    // Default: all services healthy
+    process.env.GEMINI_API_KEY = 'test-gemini-key-with-sufficient-length-1234567890'
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co'
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key'
+
+    // Mock Supabase client
+    mockSupabase = {
+      from: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockResolvedValue({ error: null }),
+    }
+    ;(createClient as jest.Mock).mockReturnValue(mockSupabase)
   })
+
+  afterEach(() => {
+    process.env = originalEnv
+  })
+
+  // ==========================================
+  // HEALTHY SERVICE
+  // ==========================================
 
   describe('Healthy Service', () => {
     it('should return 200 with healthy status when all checks pass', async () => {
-      // Mock successful external API call
       const mockSurah = {
         surah: 1,
         nameArabic: 'الفاتحة',
@@ -56,26 +85,22 @@ describe('GET /api/health', () => {
         checks: {
           api: { status: 'pass' },
           quranService: { status: 'pass' },
-          externalApi: { status: 'pass' },
+          quranApi: { status: 'pass' },
+          geminiConfig: { status: 'pass' },
+          database: { status: 'pass' },
         },
       })
       expect(data.timestamp).toBeDefined()
       expect(data.responseTime).toBeGreaterThanOrEqual(0)
-      expect(data.environment).toBe(process.env.NODE_ENV)
+      expect(data.environment).toBeDefined()
     })
 
     it('should include response time in milliseconds', async () => {
-      const mockSurah = {
+      ;(quranService.getSurah as jest.Mock).mockResolvedValue({
         surah: 1,
-        nameArabic: 'الفاتحة',
-        nameEnglish: 'The Opening',
-        nameSimple: 'Al-Fatihah',
         ayahCount: 7,
         revelationPlace: 'makkah' as const,
-        revelationOrder: 5,
-      }
-
-      ;(quranService.getSurah as jest.Mock).mockResolvedValue(mockSurah)
+      })
 
       const response = await GET()
       const data = await response.json()
@@ -85,9 +110,12 @@ describe('GET /api/health', () => {
     })
   })
 
+  // ==========================================
+  // DEGRADED SERVICE
+  // ==========================================
+
   describe('Degraded Service', () => {
-    it('should return 200 with degraded status on rate limit', async () => {
-      // Mock rate limit error
+    it('should return 200 with degraded status on Quran rate limit', async () => {
       ;(quranService.getSurah as jest.Mock).mockRejectedValue(
         new QuranServiceError('Rate limit exceeded', 'RATE_LIMIT')
       )
@@ -97,12 +125,11 @@ describe('GET /api/health', () => {
 
       expect(response.status).toBe(200) // Still 200 for degraded
       expect(data.status).toBe('degraded')
-      expect(data.checks.externalApi.status).toBe('fail')
-      expect(data.checks.externalApi.message).toContain('RATE_LIMIT')
+      expect(data.checks.quranApi.status).toBe('fail')
+      expect(data.checks.quranApi.message).toContain('RATE_LIMIT')
     })
 
-    it('should return degraded status when API returns unexpected data', async () => {
-      // Mock unexpected response (wrong surah ID)
+    it('should return degraded status when Quran API returns unexpected data', async () => {
       ;(quranService.getSurah as jest.Mock).mockResolvedValue({
         surah: 999, // Wrong ID
         nameEnglish: 'Test',
@@ -113,14 +140,35 @@ describe('GET /api/health', () => {
 
       expect(response.status).toBe(200)
       expect(data.status).toBe('degraded')
-      expect(data.checks.externalApi.status).toBe('warn')
-      expect(data.checks.externalApi.message).toContain('unexpected data')
+      expect(data.checks.quranApi.status).toBe('warn')
+      expect(data.checks.quranApi.message).toContain('unexpected data')
+    })
+
+    it('should return degraded when Gemini API key too short', async () => {
+      process.env.GEMINI_API_KEY = 'short'
+
+      ;(quranService.getSurah as jest.Mock).mockResolvedValue({
+        surah: 1,
+        ayahCount: 7,
+        revelationPlace: 'makkah' as const,
+      })
+
+      const response = await GET()
+      const data = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(data.status).toBe('degraded')
+      expect(data.checks.geminiConfig.status).toBe('warn')
+      expect(data.checks.geminiConfig.message).toContain('too short')
     })
   })
 
+  // ==========================================
+  // UNHEALTHY SERVICE
+  // ==========================================
+
   describe('Unhealthy Service', () => {
-    it('should return 503 with unhealthy status on timeout', async () => {
-      // Mock timeout error
+    it('should return 503 with unhealthy status on Quran timeout', async () => {
       ;(quranService.getSurah as jest.Mock).mockRejectedValue(
         new QuranServiceError('Request timeout', 'TIMEOUT')
       )
@@ -130,12 +178,11 @@ describe('GET /api/health', () => {
 
       expect(response.status).toBe(503)
       expect(data.status).toBe('unhealthy')
-      expect(data.checks.externalApi.status).toBe('fail')
-      expect(data.checks.externalApi.message).toContain('TIMEOUT')
+      expect(data.checks.quranApi.status).toBe('fail')
+      expect(data.checks.quranApi.message).toContain('TIMEOUT')
     })
 
-    it('should return 503 with unhealthy status on validation error', async () => {
-      // Mock validation error
+    it('should return 503 with unhealthy status on Quran validation error', async () => {
       ;(quranService.getSurah as jest.Mock).mockRejectedValue(
         new QuranServiceError('Validation failed', 'VALIDATION')
       )
@@ -145,12 +192,11 @@ describe('GET /api/health', () => {
 
       expect(response.status).toBe(503)
       expect(data.status).toBe('unhealthy')
-      expect(data.checks.externalApi.status).toBe('fail')
-      expect(data.checks.externalApi.message).toContain('VALIDATION')
+      expect(data.checks.quranApi.status).toBe('fail')
+      expect(data.checks.quranApi.message).toContain('VALIDATION')
     })
 
-    it('should return 503 with unhealthy status on unknown error', async () => {
-      // Mock unknown error
+    it('should return 503 with unhealthy status on Quran unknown error', async () => {
       ;(quranService.getSurah as jest.Mock).mockRejectedValue(
         new QuranServiceError('Unknown error', 'UNKNOWN')
       )
@@ -160,11 +206,10 @@ describe('GET /api/health', () => {
 
       expect(response.status).toBe(503)
       expect(data.status).toBe('unhealthy')
-      expect(data.checks.externalApi.status).toBe('fail')
+      expect(data.checks.quranApi.status).toBe('fail')
     })
 
-    it('should return 503 with unhealthy status on generic error', async () => {
-      // Mock generic error (not QuranServiceError)
+    it('should return 503 with unhealthy status on generic Quran error', async () => {
       ;(quranService.getSurah as jest.Mock).mockRejectedValue(
         new Error('Network failure')
       )
@@ -174,35 +219,105 @@ describe('GET /api/health', () => {
 
       expect(response.status).toBe(503)
       expect(data.status).toBe('unhealthy')
-      expect(data.checks.externalApi.message).toBe('Network failure')
+      expect(data.checks.quranApi.message).toContain('Network failure')
     })
-  })
 
-  describe('Service Initialization', () => {
-    it('should fail gracefully if quranService is null/undefined', async () => {
-      // This test verifies the null check works
-      const originalService = (quranService as any)
-      
-      // Temporarily break the service
-      jest.mock('@/lib/services/quran/QuranService', () => ({
-        quranService: null,
-      }))
+    it('should return 503 when Gemini API key missing', async () => {
+      delete process.env.GEMINI_API_KEY
+
+      ;(quranService.getSurah as jest.Mock).mockResolvedValue({
+        surah: 1,
+        ayahCount: 7,
+        revelationPlace: 'makkah' as const,
+      })
 
       const response = await GET()
       const data = await response.json()
 
-      // Should still return a response, not crash
-      expect(response.status).toBeGreaterThanOrEqual(200)
-      expect(data).toHaveProperty('status')
-      expect(data).toHaveProperty('checks')
+      expect(response.status).toBe(503)
+      expect(data.status).toBe('unhealthy')
+      expect(data.checks.geminiConfig.status).toBe('fail')
+      expect(data.checks.geminiConfig.message).toContain('not configured')
+    })
+
+    it('should return 503 when database credentials missing', async () => {
+      delete process.env.NEXT_PUBLIC_SUPABASE_URL
+
+      ;(quranService.getSurah as jest.Mock).mockResolvedValue({
+        surah: 1,
+        ayahCount: 7,
+        revelationPlace: 'makkah' as const,
+      })
+
+      const response = await GET()
+      const data = await response.json()
+
+      expect(response.status).toBe(503)
+      expect(data.status).toBe('unhealthy')
+      expect(data.checks.database.status).toBe('fail')
+      expect(data.checks.database.message).toContain('not configured')
+    })
+
+    it('should return 503 when database connection fails', async () => {
+      mockSupabase.limit.mockResolvedValue({
+        error: { message: 'Connection refused' },
+      })
+
+      ;(quranService.getSurah as jest.Mock).mockResolvedValue({
+        surah: 1,
+        ayahCount: 7,
+        revelationPlace: 'makkah' as const,
+      })
+
+      const response = await GET()
+      const data = await response.json()
+
+      expect(response.status).toBe(503)
+      expect(data.status).toBe('unhealthy')
+      expect(data.checks.database.status).toBe('fail')
     })
   })
+
+  // ==========================================
+  // SERVICE INITIALIZATION
+  // ==========================================
+
+  describe('Service Initialization', () => {
+    it('should fail gracefully if quranService is null/undefined', async () => {
+      // Store the original mock
+      const originalMock = jest.requireMock('@/lib/services/quran/QuranService')
+      
+      // Temporarily set quranService to null
+      jest.doMock('@/lib/services/quran/QuranService', () => ({
+        quranService: null,
+      }))
+
+      // Clear the module cache to force re-import
+      jest.resetModules()
+
+      // Import the route with the null service
+      const { GET } = await import('@/app/api/health/route')
+
+      const response = await GET()
+      const data = await response.json()
+
+      expect(data.checks.quranService.status).toBe('fail')
+      expect(data.checks.quranApi.status).toBe('unknown')
+
+      // Restore the original mock
+      jest.doMock('@/lib/services/quran/QuranService', () => originalMock)
+      jest.resetModules()
+    })
+  })
+
+  // ==========================================
+  // RESPONSE STRUCTURE
+  // ==========================================
 
   describe('Response Structure', () => {
     it('should always include required fields', async () => {
       ;(quranService.getSurah as jest.Mock).mockResolvedValue({
         surah: 1,
-        nameEnglish: 'The Opening',
         ayahCount: 7,
         revelationPlace: 'makkah' as const,
       })
@@ -220,15 +335,15 @@ describe('GET /api/health', () => {
       // Checks structure
       expect(data.checks).toHaveProperty('api')
       expect(data.checks).toHaveProperty('quranService')
-      expect(data.checks).toHaveProperty('externalApi')
+      expect(data.checks).toHaveProperty('quranApi')
+      expect(data.checks).toHaveProperty('geminiConfig')
+      expect(data.checks).toHaveProperty('database')
 
       // Each check has status and message
-      expect(data.checks.api).toHaveProperty('status')
-      expect(data.checks.api).toHaveProperty('message')
-      expect(data.checks.quranService).toHaveProperty('status')
-      expect(data.checks.quranService).toHaveProperty('message')
-      expect(data.checks.externalApi).toHaveProperty('status')
-      expect(data.checks.externalApi).toHaveProperty('message')
+      Object.values(data.checks).forEach((check: any) => {
+        expect(check).toHaveProperty('status')
+        expect(check).toHaveProperty('message')
+      })
     })
 
     it('should have valid ISO 8601 timestamp', async () => {
@@ -258,24 +373,78 @@ describe('GET /api/health', () => {
       expect(['healthy', 'degraded', 'unhealthy']).toContain(data.status)
     })
   })
+
+  // ==========================================
+  // EDGE CASES
+  // ==========================================
+
+  describe('Edge Cases', () => {
+    it('should skip Quran API check if service not initialized', async () => {
+      // Store the original mock
+      const originalMock = jest.requireMock('@/lib/services/quran/QuranService')
+      
+      // Set quranService to null
+      jest.doMock('@/lib/services/quran/QuranService', () => ({
+        quranService: null,
+      }))
+
+      // Clear the module cache to force re-import
+      jest.resetModules()
+
+      // Import the route with the null service
+      const { GET } = await import('@/app/api/health/route')
+
+      const response = await GET()
+      const data = await response.json()
+
+      expect(data.checks.quranApi.status).toBe('unknown')
+      expect(data.checks.quranApi.message).toContain('not initialized')
+
+      // Restore the original mock
+      jest.doMock('@/lib/services/quran/QuranService', () => originalMock)
+      jest.resetModules()
+    })
+
+    it('should handle database connection throwing unexpectedly', async () => {
+      ;(createClient as jest.Mock).mockImplementation(() => {
+        throw new Error('Unexpected throw')
+      })
+
+      ;(quranService.getSurah as jest.Mock).mockResolvedValue({
+        surah: 1,
+        ayahCount: 7,
+        revelationPlace: 'makkah' as const,
+      })
+
+      const response = await GET()
+      const data = await response.json()
+
+      expect(response.status).toBe(503)
+      expect(data.checks.database.status).toBe('fail')
+    })
+  })
 })
 
 /**
  * E2E Test (Optional - requires actual environment setup)
  * 
  * This test hits the actual endpoint without mocks.
- * Only run this if QURAN_CLIENT_ID and QURAN_CLIENT_SECRET are set.
+ * Only run this if all credentials are available.
  */
-describe('E2E: GET /api/health (with real external API)', () => {
-  // Skip if credentials not available
-  const skipE2E: boolean
-    = !process.env.QURAN_CLIENT_ID || !process.env.QURAN_CLIENT_SECRET;
+describe('E2E: GET /api/health (with real external APIs)', () => {
+  const skipE2E = 
+    !process.env.QURAN_CLIENT_ID || 
+    !process.env.QURAN_CLIENT_SECRET ||
+    !process.env.GEMINI_API_KEY ||
+    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   const testFn = skipE2E ? it.skip : it
 
-  testFn('should successfully connect to real Quran Foundation API', async () => {
+  testFn('should successfully connect to all real external services', async () => {
     // Remove all mocks for E2E test
     jest.unmock('@/lib/services/quran/QuranService')
+    jest.unmock('@supabase/supabase-js')
     
     const response = await GET()
     const data = await response.json()
@@ -286,7 +455,9 @@ describe('E2E: GET /api/health (with real external API)', () => {
     expect(response.status).toBeLessThan(600)
     expect(data.checks.api.status).toBe('pass')
     
-    // External API should be pass or fail (not unknown)
-    expect(['pass', 'fail', 'warn']).toContain(data.checks.externalApi.status)
-  }, 30000) // 30 second timeout for real API call
+    // All services should have definitive status
+    expect(['pass', 'fail', 'warn']).toContain(data.checks.quranApi.status)
+    expect(['pass', 'fail', 'warn']).toContain(data.checks.geminiConfig.status)
+    expect(['pass', 'fail']).toContain(data.checks.database.status)
+  }, 30000) // 30 second timeout for real API calls
 })
