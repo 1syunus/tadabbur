@@ -1,15 +1,17 @@
 import { NextResponse } from 'next/server'
 import { quranService } from '@/lib/services/quran/QuranService'
 import { QuranServiceError } from '@/lib/external/quran/types'
+import { createClient } from '@supabase/supabase-js'
 
 /**
  * Health Check Endpoint
  * 
  * Verifies that the API and its dependencies are operational:
  * - API server is running
- * - OAuth authentication is working
- * - External Quran Foundation API is accessible
- * - Service layer is functional
+ * - Quran OAuth authentication is working
+ * - Quran external API is accessible
+ * - Gemini API key is configured
+ * - Database connectivity (Supabase)
  * 
  * @route GET /api/health
  * @returns Health status with detailed checks
@@ -26,15 +28,19 @@ export async function GET() {
     status: 'healthy' as 'healthy' | 'degraded' | 'unhealthy',
     timestamp: new Date().toISOString(),
     checks: {
-      api: { status: 'pass', message: 'API server is running' },
-      quranService: { status: 'unknown', message: 'Not checked' },
-      externalApi: { status: 'unknown', message: 'Not checked' },
+      api: { status: 'pass' as const, message: 'API server is running' },
+      quranService: { status: 'unknown' as 'pass' | 'fail' | 'warn' | 'unknown', message: 'Not checked' },
+      quranApi: { status: 'unknown' as 'pass' | 'fail' | 'warn' | 'unknown', message: 'Not checked' },
+      geminiConfig: { status: 'unknown' as 'pass' | 'fail' | 'warn' | 'unknown', message: 'Not checked' },
+      database: { status: 'unknown' as 'pass' | 'fail' | 'warn' | 'unknown', message: 'Not checked' },
     },
     responseTime: 0,
-    environment: process.env.NODE_ENV,
+    environment: process.env.NODE_ENV || 'unknown',
   }
 
-  // Check 1: Quran Service Initialization
+  // ==========================================
+  // CHECK 1: QURAN SERVICE INITIALIZATION
+  // ==========================================
   try {
     if (!quranService) {
       health.checks.quranService = {
@@ -56,19 +62,20 @@ export async function GET() {
     health.status = 'unhealthy'
   }
 
-  // Check 2: External API Connectivity (lightweight test)
-  // Fetch a simple, cacheable surah to test OAuth + API
+  // ==========================================
+  // CHECK 2: QURAN EXTERNAL API CONNECTIVITY
+  // ==========================================
   if (health.checks.quranService.status === 'pass') {
     try {
-      const testSurah = await quranService.getSurah(1) // Al-Fatiha (always exists)
+      const testSurah = await quranService.getSurah(1) // Al-Fatiha (cacheable)
       
-      if (testSurah && testSurah.surah === 1) {
-        health.checks.externalApi = {
+      if (testSurah && testSurah.surah === 1 && testSurah.ayahCount === 7) {
+        health.checks.quranApi = {
           status: 'pass',
           message: 'External API accessible and OAuth working',
         }
       } else {
-        health.checks.externalApi = {
+        health.checks.quranApi = {
           status: 'warn',
           message: 'API returned unexpected data',
         }
@@ -76,31 +83,114 @@ export async function GET() {
       }
     } catch (error) {
       if (error instanceof QuranServiceError) {
-        health.checks.externalApi = {
+        health.checks.quranApi = {
           status: 'fail',
           message: `External API error: ${error.code}`,
         }
         
-        // Rate limit = degraded (not our fault), others = unhealthy
+        // Rate limit = degraded (external issue), others = unhealthy
         health.status = error.code === 'RATE_LIMIT' ? 'degraded' : 'unhealthy'
       } else {
-        health.checks.externalApi = {
+        health.checks.quranApi = {
           status: 'fail',
           message: error instanceof Error ? error.message : 'Unknown error',
         }
         health.status = 'unhealthy'
       }
     }
+  } else {
+    health.checks.quranApi = {
+      status: 'unknown',
+      message: 'Skipped (service not initialized)',
+    }
   }
 
-  // Calculate response time
+  // ==========================================
+  // CHECK 3: GEMINI API KEY CONFIGURATION
+  // ==========================================
+  try {
+    const geminiApiKey = process.env.GEMINI_API_KEY
+    
+    if (!geminiApiKey || geminiApiKey.length === 0) {
+      health.checks.geminiConfig = {
+        status: 'fail',
+        message: 'Gemini API key not configured',
+      }
+      health.status = 'unhealthy'
+    } else if (geminiApiKey.length < 20) {
+      health.checks.geminiConfig = {
+        status: 'warn',
+        message: 'Gemini API key appears invalid (too short)',
+      }
+      if (health.status === 'healthy') {
+        health.status = 'degraded'
+      }
+    } else {
+      health.checks.geminiConfig = {
+        status: 'pass',
+        message: 'API key configured',
+      }
+    }
+  } catch (error) {
+    health.checks.geminiConfig = {
+      status: 'fail',
+      message: error instanceof Error ? error.message : 'Configuration error',
+    }
+    health.status = 'unhealthy'
+  }
+
+  // ==========================================
+  // CHECK 4: DATABASE CONNECTIVITY (SUPABASE)
+  // ==========================================
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      health.checks.database = {
+        status: 'fail',
+        message: 'Supabase credentials not configured',
+      }
+      health.status = 'unhealthy'
+    } else {
+      // Quick connectivity test - just create client and do minimal query
+      const supabase = createClient(supabaseUrl, supabaseAnonKey)
+      
+      // Simple health check query (doesn't require auth)
+      const { error } = await supabase.from('conversations').select('count', { count: 'exact', head: true }).limit(0)
+      
+      if (error) {
+        health.checks.database = {
+          status: 'fail',
+          message: `Database error: ${error.message}`,
+        }
+        health.status = 'unhealthy'
+      } else {
+        health.checks.database = {
+          status: 'pass',
+          message: 'Database accessible',
+        }
+      }
+    }
+  } catch (error) {
+    health.checks.database = {
+      status: 'fail',
+      message: error instanceof Error ? error.message : 'Database connection error',
+    }
+    health.status = 'unhealthy'
+  }
+
+  // ==========================================
+  // FINALIZE RESPONSE
+  // ==========================================
+  
   health.responseTime = Date.now() - startTime
 
   // Return appropriate HTTP status
   const httpStatus = 
     health.status === 'healthy' ? 200 : 
-    health.status === 'degraded' ? 200 : // Still return 200 for degraded
-    503 // Service unavailable for unhealthy
+    health.status === 'degraded' ? 200 : // Still operational
+    503 // Service unavailable
 
   return NextResponse.json(health, { status: httpStatus })
 }
@@ -120,9 +210,17 @@ export async function GET() {
  *       "status": "pass" | "fail" | "unknown",
  *       "message": "Service initialized"
  *     },
- *     "externalApi": {
+ *     "quranApi": {
  *       "status": "pass" | "fail" | "warn" | "unknown",
  *       "message": "External API accessible and OAuth working"
+ *     },
+ *     "geminiConfig": {
+ *       "status": "pass" | "fail" | "warn" | "unknown",
+ *       "message": "API key configured"
+ *     },
+ *     "database": {
+ *       "status": "pass" | "fail" | "unknown",
+ *       "message": "Database accessible"
  *     }
  *   },
  *   "responseTime": 234,
