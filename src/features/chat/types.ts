@@ -11,7 +11,7 @@ import type {
   NormalizedConversation,
   NormalizedMessage,
   AIResponse,
-} from 'src/lib/frontend/api'
+} from '@/lib/frontend/api'
 
 // Re-export DAL types for convenience
 export type { NormalizedConversation, NormalizedMessage, AIResponse }
