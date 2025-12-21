@@ -11,7 +11,7 @@ import type {
   NormalizedConversation,
   NormalizedMessage,
   AIResponse,
-} from '@/lib/frontend/api'
+} from '@ui/lib/frontend/api'
 
 // Re-export DAL types for convenience
 export type { NormalizedConversation, NormalizedMessage, AIResponse }
@@ -42,8 +42,9 @@ export interface ConversationWithPreview extends NormalizedConversation {
   previewText: string
   
   /** 
-   * Last message timestamp when messages exist; null otherwise.
-   * Never undefined, Date(0), or empty string.
+   * Last message ISO 8601 timestamp string when messages exist; null otherwise.
+   * Format: "2024-01-01T12:00:00Z"
+   * Never undefined or empty string.
    */
-  lastMessageTimestamp: Date | null
+  lastMessageTimestamp: string | null
 }
