@@ -27,7 +27,10 @@
     "paths": {
       "@/*": [
         "./*"
-      ] /* CRITICAL for the import alias */
+      ],
+      "@ui/*": [
+        "src/*"
+      ]
     },
     "baseUrl": ".",
     "resolveJsonModule": true
